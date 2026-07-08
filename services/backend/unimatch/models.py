@@ -116,6 +116,7 @@ class Profile(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False
     )
+    nickname: Mapped[str] = mapped_column(String(64), nullable=False)
     avatar_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     gender: Mapped[Gender | None] = mapped_column(
         Enum(Gender, name="gender"), nullable=True

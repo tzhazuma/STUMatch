@@ -1,4 +1,4 @@
-"""Discovery routes: sections, search, push toggle, user detail.""
+"""Discovery routes: sections, search, push toggle, user detail."""
 from typing import Any
 from uuid import UUID
 

@@ -84,7 +84,7 @@ class ProfileOut(BaseModel):
     birth_date: date | None
     age: int | None
     education_level: str | None
-    school: str | None
+    school: str | None = None
     major: str | None
     mbti: str | None
     interests: list[str]
@@ -94,8 +94,8 @@ class ProfileOut(BaseModel):
     dating_purpose: str | None
     family_status: str | None
     ideal_person: str | None
-    is_verified_email: bool
-    is_verified_school: bool
+    is_verified_email: bool = False
+    is_verified_school: bool = False
     created_at: datetime
     updated_at: datetime
 

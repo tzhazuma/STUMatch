@@ -1,4 +1,4 @@
-"""Friend request and friendship routes.""
+"""Friend request and friendship routes."""
 from typing import Any
 from uuid import UUID
 

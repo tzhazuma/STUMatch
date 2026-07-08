@@ -1,4 +1,4 @@
-"""REST chat routes: conversations, messages, send via REST.""
+"""REST chat routes: conversations, messages, send via REST."""
 from typing import Any
 from uuid import UUID
 

@@ -1,4 +1,4 @@
-"""Profile routes: CRUD, avatar upload, consent.""
+"""Profile routes: CRUD, avatar upload, consent."""
 from typing import Any
 from datetime import date
 from uuid import UUID
@@ -39,6 +39,7 @@ async def get_my_profile(
 ) -> dict[str, Any]:
     profile = await _get_or_create_profile(db, current_user)
     data = ProfileOut.model_validate(profile).model_dump()
+    data["school"] = current_user.school
     data["is_verified_email"] = current_user.is_verified_email
     data["is_verified_school"] = current_user.is_verified_school
     return {"data": data}
@@ -64,6 +65,7 @@ async def update_profile(
     await db.commit()
     await db.refresh(profile)
     data = ProfileOut.model_validate(profile).model_dump()
+    data["school"] = current_user.school
     data["is_verified_email"] = current_user.is_verified_email
     data["is_verified_school"] = current_user.is_verified_school
     return {"data": data}
