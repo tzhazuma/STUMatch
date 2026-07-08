@@ -75,8 +75,9 @@ jobs:
 
       - name: Package web build
         run: |
+          mkdir -p "$GITHUB_WORKSPACE/apps/mobile/dist-mobile"
           cd apps/web/dist
-          zip -r ../../apps/mobile/dist-mobile/unimatch-web-dist.zip .
+          zip -r "$GITHUB_WORKSPACE/apps/mobile/dist-mobile/unimatch-web-dist.zip" .
 
       - name: Create GitHub Release
         env:
