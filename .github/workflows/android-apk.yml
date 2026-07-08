@@ -1,0 +1,81 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/mobile/**'
+      - '.github/workflows/android-apk.yml'
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+
+    env:
+      JAVA_HOME: /usr/lib/jvm/temurin-17-jdk-amd64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: apps/mobile/package-lock.json
+
+      - name: Install mobile dependencies
+        working-directory: apps/mobile
+        run: npm install
+
+      - name: Expo prebuild
+        working-directory: apps/mobile
+        run: npx expo prebuild --clean --platform android
+
+      - name: Build release APK
+        working-directory: apps/mobile/android
+        run: ./gradlew assembleRelease
+
+      - name: Rename APK
+        working-directory: apps/mobile/android/app/build/outputs/apk/release
+        run: |
+          mv app-release.apk unimatch-${{ github.run_number }}.apk
+          echo "APK_PATH=apps/mobile/android/app/build/outputs/apk/release/unimatch-${{ github.run_number }}.apk" >> $GITHUB_ENV
+          echo "APK_NAME=unimatch-${{ github.run_number }}.apk" >> $GITHUB_ENV
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="v0.1.0-apk-${{ github.run_number }}"
+          gh release create "$TAG" \
+            --title "UniMatch Android APK Build ${{ github.run_number }}" \
+            --notes "Automated APK build from GitHub Actions." \
+            "${{ env.APK_PATH }}#${{ env.APK_NAME }}"
+          echo "RELEASE_TAG=$TAG" >> $GITHUB_ENV
+
+      - name: Write APK release URL to branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          URL="https://github.com/${{ github.repository }}/releases/download/${{ env.RELEASE_TAG }}/${{ env.APK_NAME }}"
+          mkdir -p /tmp/apk-release
+          echo "$URL" > /tmp/apk-release/apk-url.txt
+          echo "TAG=${{ env.RELEASE_TAG }}" >> /tmp/apk-release/apk-url.txt
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+          git checkout --orphan apk-release-temp
+          git rm -rf .
+          mv /tmp/apk-release/apk-url.txt .
+          git add apk-url.txt
+          git commit -m "chore: update APK release URL for build ${{ github.run_number }}"
+          git push --force origin apk-release-temp:apk-release
