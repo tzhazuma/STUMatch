@@ -63,19 +63,17 @@ jobs:
             "${{ env.APK_PATH }}#${{ env.APK_NAME }}"
           echo "RELEASE_TAG=$TAG" >> $GITHUB_ENV
 
-      - name: Write APK release URL to branch
+      - name: Push APK to apk-release branch
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          URL="https://github.com/${{ github.repository }}/releases/download/${{ env.RELEASE_TAG }}/${{ env.APK_NAME }}"
-          mkdir -p /tmp/apk-release
-          echo "$URL" > /tmp/apk-release/apk-url.txt
-          echo "TAG=${{ env.RELEASE_TAG }}" >> /tmp/apk-release/apk-url.txt
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
           git checkout --orphan apk-release-temp
           git rm -rf .
-          mv /tmp/apk-release/apk-url.txt .
-          git add apk-url.txt
-          git commit -m "chore: update APK release URL for build ${{ github.run_number }}"
-          git push --force origin apk-release-temp:apk-release
+          cp "${{ env.APK_PATH }}" .
+          echo "${{ env.APK_NAME }}" > apk-name.txt
+          echo "Build ${{ github.run_number }}" >> apk-name.txt
+          git add "${{ env.APK_NAME }}" apk-name.txt
+          git commit -m "chore: add APK build ${{ github.run_number }}"
+          git push --force "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git" apk-release-temp:apk-release
