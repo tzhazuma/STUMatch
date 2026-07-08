@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "UniMatch",
+    "slug": "unimatch",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.unimatch.mobile"
+    },
+    "android": {
+      "package": "com.unimatch.mobile",
+      "adaptiveIcon": {
+        "backgroundColor": "#ffffff"
+      }
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "允许 UniMatch 访问你的相册以设置头像。"
+        }
+      ]
+    ],
+    "extra": {
+      "API_URL": "http://localhost:8000"
+    }
+  }
+}
