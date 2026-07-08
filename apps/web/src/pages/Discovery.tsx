@@ -34,8 +34,6 @@ export default function Discovery() {
     message: '',
   });
 
-  const current = sections.find((s) => s.key === section) || sections[0];
-
   useEffect(() => {
     getMyProfile().then(setProfile).catch(() => {});
   }, []);
@@ -135,15 +133,15 @@ export default function Discovery() {
       </div>
 
       {loading ? (
-        <p className="text-center text-sm text-gray-500">加载中...\u003c/p\u003e
+        <p className="text-center text-sm text-gray-500">加载中...</p>
       ) : users.length === 0 ? (
-        <Card className="py-12 text-center text-sm text-gray-500">暂无用户\u003c/Card\u003e
+        <Card className="py-12 text-center text-sm text-gray-500">暂无用户</Card>
       ) : (
         <div className="space-y-3">
           {users.map((u) => (
             <UserCard key={u.user_id} user={u} section={section as Section} onAddFriend={handleAddFriend} />
           ))}
-        \u003c/div\u003e
+        </div>
       )}
 
       <Modal
@@ -153,11 +151,11 @@ export default function Discovery() {
         footer={
           <Button onClick={() => setModal({ ...modal, open: false })} variant="secondary">
             知道了
-          \u003c/Button\u003e
+          </Button>
         }
       >
         {modal.message}
-      \u003c/Modal\u003e
-    \u003c/div\u003e
+      </Modal>
+    </div>
   );
 }

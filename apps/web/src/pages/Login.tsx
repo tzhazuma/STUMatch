@@ -23,7 +23,7 @@ export default function Login() {
     if (!email) return;
     setLoading(true);
     try {
-      await sendVerificationCode({ email, phone: null, purpose: mode === 'register' ? 'register' : 'login' });
+      await sendVerificationCode({ email, purpose: mode === 'register' ? 'register' : 'login' });
       setCodeSent(true);
     } catch (e: any) {
       setError(e?.response?.data?.message || e?.message || '发送失败');

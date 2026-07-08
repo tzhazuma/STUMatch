@@ -15,7 +15,7 @@ export default function Friends() {
     setLoading(true);
     const [f, r] = await Promise.all([listFriends(), listFriendRequests('received')]);
     setFriends(f);
-    setRequests(r);
+    setRequests(r.items);
     setLoading(false);
   };
 

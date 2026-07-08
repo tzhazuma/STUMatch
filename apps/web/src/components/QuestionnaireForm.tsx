@@ -4,7 +4,7 @@ import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Textarea } from './ui/Textarea';
 import { Card } from './ui/Card';
-import type { Questionnaire, QuestionType, Section } from '@/types';
+import type { Questionnaire, Question } from '@/types';
 
 export const SAMPLE_QUESTIONNAIRES: Questionnaire[] = [
   {
@@ -134,7 +134,7 @@ function QuestionInput({
   onAddTag,
   onRemoveTag,
 }: {
-  question: { id: string; type: QuestionType; options?: { value: string; label: string }[]; max?: number; min?: number };
+  question: Question;
   value: unknown;
   onChange: (v: unknown) => void;
   onToggle: (v: string) => void;
@@ -207,7 +207,7 @@ function QuestionInput({
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
-                addTag(tagInput);
+                onAddTag(tagInput);
                 setTagInput('');
               }
             }}

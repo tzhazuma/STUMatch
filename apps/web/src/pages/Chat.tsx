@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
-import { getMessages, sendMessage, markMessageRead } from '@/api/endpoints';
+import { getMessages, sendMessage } from '@/api/endpoints';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { useAuthStore } from '@/store/authStore';
 import type { Message } from '@/types';

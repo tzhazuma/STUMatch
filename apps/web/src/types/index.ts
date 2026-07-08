@@ -123,6 +123,8 @@ export interface Friend {
   user_id: string;
   nickname: string;
   avatar_url?: string;
+  school?: string;
+  major?: string;
   conversation_id: string;
 }
 

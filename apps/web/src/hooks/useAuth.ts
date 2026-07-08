@@ -1,7 +1,6 @@
 import { useCallback } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { login as apiLogin, register as apiRegister, logout as apiLogout } from '@/api/endpoints';
-import type { User } from '@/types';
 
 export function useAuth() {
   const { user, isAuthenticated, access_token, expires_at, setAuth, setUser, logout } = useAuthStore();
