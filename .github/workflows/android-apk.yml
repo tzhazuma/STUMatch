@@ -1,20 +1,16 @@
-name: Build Android APK
+name: Build Android APK and Release
 
 on:
   push:
     branches: [main]
-    paths:
-      - 'apps/mobile/**'
-      - '.github/workflows/android-apk.yml'
   workflow_dispatch:
 
 jobs:
-  build-apk:
-    name: Build Android APK
+  build-and-release:
+    name: Build Android APK and Web, then Release
     runs-on: ubuntu-latest
-
-    env:
-      JAVA_HOME: /usr/lib/jvm/temurin-17-jdk-amd64
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout repository
@@ -26,6 +22,13 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      - name: Set up Android SDK + NDK
+        uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: '12266719'
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0 ndk;26.1.10909125 cmake;3.22.1'
+          accept-android-sdk-licenses: true
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -35,45 +38,54 @@ jobs:
 
       - name: Install mobile dependencies
         working-directory: apps/mobile
-        run: npm install
+        run: |
+          npm install
 
       - name: Expo prebuild
         working-directory: apps/mobile
-        run: npx expo prebuild --clean --platform android
+        run: npx expo prebuild --platform android
+
+      - name: Apply Gradle compatibility fixes
+        working-directory: apps/mobile
+        run: |
+          # Force Kotlin Gradle plugin version to match Compose compiler
+          sed -i "s|classpath('org.jetbrains.kotlin:kotlin-gradle-plugin')|classpath(\"org.jetbrains.kotlin:kotlin-gradle-plugin:\${rootProject.ext.kotlinVersion}\")|" android/build.gradle
+          # Ensure Kotlin version property is set
+          if ! grep -q '^android.kotlinVersion=' android/gradle.properties; then
+            echo "" >> android/gradle.properties
+            echo "android.kotlinVersion=1.9.25" >> android/gradle.properties
+          fi
 
       - name: Build release APK
         working-directory: apps/mobile/android
-        run: ./gradlew assembleRelease
+        run: ./gradlew --no-daemon assembleRelease
 
       - name: Rename APK
-        working-directory: apps/mobile/android/app/build/outputs/apk/release
         run: |
-          mv app-release.apk unimatch-${{ github.run_number }}.apk
-          echo "APK_PATH=apps/mobile/android/app/build/outputs/apk/release/unimatch-${{ github.run_number }}.apk" >> $GITHUB_ENV
-          echo "APK_NAME=unimatch-${{ github.run_number }}.apk" >> $GITHUB_ENV
+          mkdir -p apps/mobile/dist-mobile
+          cp apps/mobile/android/app/build/outputs/apk/release/app-release.apk apps/mobile/dist-mobile/unimatch-release.apk
+
+      - name: Install web dependencies
+        working-directory: apps/web
+        run: npm install
+
+      - name: Build web frontend
+        working-directory: apps/web
+        run: npm run build
+
+      - name: Package web build
+        run: |
+          cd apps/web/dist
+          zip -r ../../apps/mobile/dist-mobile/unimatch-web-dist.zip .
 
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="v0.1.0-apk-${{ github.run_number }}"
+          TAG="v0.1.0"
+          gh release delete "$TAG" --yes || true
           gh release create "$TAG" \
-            --title "UniMatch Android APK Build ${{ github.run_number }}" \
-            --notes "Automated APK build from GitHub Actions." \
-            "${{ env.APK_PATH }}#${{ env.APK_NAME }}"
-          echo "RELEASE_TAG=$TAG" >> $GITHUB_ENV
-
-      - name: Push APK to apk-release branch
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git config --global user.name "github-actions[bot]"
-          git checkout --orphan apk-release-temp
-          git rm -rf .
-          cp "${{ env.APK_PATH }}" .
-          echo "${{ env.APK_NAME }}" > apk-name.txt
-          echo "Build ${{ github.run_number }}" >> apk-name.txt
-          git add "${{ env.APK_NAME }}" apk-name.txt
-          git commit -m "chore: add APK build ${{ github.run_number }}"
-          git push --force "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git" apk-release-temp:apk-release
+            --title "UniMatch v0.1.0" \
+            --notes "Android APK 与 Web 构建包" \
+            apps/mobile/dist-mobile/unimatch-release.apk \
+            apps/mobile/dist-mobile/unimatch-web-dist.zip
