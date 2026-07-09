@@ -10,6 +10,7 @@
 
 ### POST `/auth/send-verification-code`
 发送邮箱/手机验证码。开发环境使用 mock 会在服务端日志打印验证码。
+**学校邮箱白名单**：注册时邮箱后缀必须匹配 `ALLOWED_EMAIL_DOMAINS`（默认 `@shanghaitech.edu.cn`），否则返回 `400`。
 
 **请求体：**
 ```json
@@ -84,7 +85,7 @@
 ---
 
 ### POST `/auth/logout`
-前端调用后把 token 加入黑名单（Redis），后端返回成功。
+前端调用后把当前 `Authorization: Bearer <token>` 加入黑名单（Redis），后端返回成功。请求需携带 token。
 
 ---
 
@@ -276,6 +277,14 @@ section 取值：`academic` | `daily` | `dating`。
 
 ### GET `/friends/requests`
 查询好友申请。`?direction=received|sent`。
+
+**响应：**
+```json
+{
+  "items": [...],
+  "total": 5
+}
+```
 
 ### POST `/friends/requests/{request_id}/accept`
 接受好友申请。

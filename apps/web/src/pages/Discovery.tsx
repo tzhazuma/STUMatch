@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { Search, Bell } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -23,6 +23,7 @@ const sections: { key: Section; label: string }[] = [
 export default function Discovery() {
   const { section = 'academic' } = useParams<{ section: Section }>();
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [users, setUsers] = useState<DiscoveryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [q, setQ] = useState(searchParams.get('q') || '');
@@ -103,7 +104,7 @@ export default function Discovery() {
             href={`/discovery/${s.key}`}
             onClick={(e) => {
               e.preventDefault();
-              window.location.href = `/discovery/${s.key}`;
+              navigate(`/discovery/${s.key}`);
             }}
             className={`flex-1 rounded-lg py-2 text-center text-sm font-medium transition ${
               section === s.key ? 'bg-brand-600 text-white' : 'text-gray-600 hover:bg-gray-50'

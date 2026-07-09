@@ -18,13 +18,21 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [codeSent, setCodeSent] = useState(false);
+  const [countdown, setCountdown] = useState(0);
 
   const handleSendCode = async () => {
-    if (!email) return;
+    if (!email || countdown > 0) return;
     setLoading(true);
     try {
       await sendVerificationCode({ email, purpose: mode === 'register' ? 'register' : 'login' });
       setCodeSent(true);
+      setCountdown(60);
+      const timer = setInterval(() => {
+        setCountdown((prev) => {
+          if (prev <= 1) { clearInterval(timer); return 0; }
+          return prev - 1;
+        });
+      }, 1000);
     } catch (e: any) {
       setError(e?.response?.data?.message || e?.message || '发送失败');
     } finally {
@@ -96,7 +104,7 @@ export default function Login() {
                   required
                 />
                 <Button type="button" variant="secondary" onClick={handleSendCode} isLoading={loading} className="mt-6">
-                  {codeSent ? '已发送' : '发送验证码'}
+                  {countdown > 0 ? `${countdown}s` : codeSent ? '重新发送' : '发送验证码'}
                 </Button>
               </div>
               <Input label="昵称" value={nickname} onChange={(e) => setNickname(e.target.value)} required />

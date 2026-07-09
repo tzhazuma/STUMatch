@@ -1,4 +1,5 @@
 """Message board routes for each section."""
+import asyncio
 from typing import Any
 from uuid import UUID
 
@@ -54,7 +55,7 @@ async def post_message(
     current_user: User = Depends(get_current_user),
 ) -> dict[str, Any]:
     moderation = ModerationService()
-    check = moderation.check_text(payload.content, source="board")
+    check = await asyncio.to_thread(moderation.check_text, payload.content, "board")
     if check["triggered"]:
         raise HTTPException(status_code=400, detail="包含违禁词")
     msg = MessageBoard(

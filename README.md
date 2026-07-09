@@ -36,7 +36,7 @@ UniMatch 面向高校学生，提供三个主要板块：
 
 核心功能包括：
 
-- 邮箱/手机验证码注册与登录（JWT + Refresh Token）
+- 邮箱/手机验证码注册与登录（JWT + Refresh Token），默认优先学校邮箱白名单
 - 个人资料与头像管理
 - 三板块发现与推荐系统
 - 好友申请、聊天（WebSocket + REST 备用）与留言板
@@ -188,7 +188,8 @@ npx expo start
 | 类别 | 变量 | 说明 |
 |------|------|------|
 | 应用 | `APP_NAME` | 应用名称 |
-| 认证 | `SECRET_KEY` | JWT 签名密钥，至少 32 位随机字符串 |
+| 认证 | `SECRET_KEY` | JWT 签名密钥，启动前必须设置，至少 32 位随机字符串 |
+| 认证 | `ALLOWED_EMAIL_DOMAINS` | 允许注册的邮箱后缀，多个用逗号分隔，默认 `shanghaitech.edu.cn` |
 | 数据库 | `DATABASE_URL` | PostgreSQL async 连接串 |
 | 缓存 | `REDIS_URL` | Redis 连接串 |
 | 文件存储 | `STORAGE_PROVIDER` | `minio` 或 `s3` |

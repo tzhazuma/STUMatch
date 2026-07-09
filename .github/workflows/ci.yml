@@ -11,6 +11,15 @@ jobs:
     name: Backend Tests
     runs-on: ubuntu-latest
 
+    env:
+      SECRET_KEY: test-secret-key-change-in-production
+      ALLOWED_EMAIL_DOMAINS: example.com
+      MAIL_PROVIDER: mock
+      STORAGE_PROVIDER: local
+      AI_PROVIDER: deepseek
+      DATABASE_URL: postgresql+asyncpg://unimatch:unimatch@localhost:5432/unimatch_test
+      REDIS_URL: redis://localhost:6379/15
+
     services:
       postgres:
         image: pgvector/pgvector:pg16

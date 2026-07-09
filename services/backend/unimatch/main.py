@@ -27,6 +27,9 @@ from unimatch.routers import (
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
+if not settings.SECRET_KEY:
+    raise RuntimeError("❌ 必须设置 SECRET_KEY！请在 .env 里配置")
+
 
 async def seed_questionnaires() -> None:
     """Seed default questionnaires if none exist."""
@@ -134,7 +137,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:5173", "http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

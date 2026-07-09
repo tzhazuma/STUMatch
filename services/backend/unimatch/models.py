@@ -175,10 +175,6 @@ class UserConsent(Base):
         nullable=False,
     )
 
-    __table_args__ = (
-        {"sqlite_autoincrement": True},  # type: ignore
-    )
-
 
 class Questionnaire(Base):
     __tablename__ = "questionnaires"
@@ -232,10 +228,6 @@ class QuestionnaireResponse(Base):
 
     questionnaire: Mapped[Questionnaire] = relationship(
         "Questionnaire", back_populates="responses", lazy="selectin"
-    )
-
-    __table_args__ = (
-        {"sqlite_autoincrement": True},  # type: ignore
     )
 
 

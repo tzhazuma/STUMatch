@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials
 from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,6 +30,7 @@ from unimatch.security import (
     decode_token,
     get_current_user,
     get_password_hash,
+    security_bearer,
     verify_password,
 )
 from unimatch.services.email import EmailService
@@ -57,6 +59,13 @@ async def send_verification_code(
     target = payload.email or payload.phone
     if not target:
         raise HTTPException(status_code=400, detail="email or phone required")
+
+    if payload.email:
+        domain = payload.email.split('@')[1].lower()
+        allowed = [d.strip() for d in settings.ALLOWED_EMAIL_DOMAINS.split(",")]
+        if not any(domain == d or domain.endswith("." + d) for d in allowed):
+            raise HTTPException(status_code=400, detail="请使用学校邮箱注册")
+
     code = _generate_code()
     await redis.setex(_code_key(target, payload.purpose), 600, code)
     if payload.email:
@@ -96,6 +105,13 @@ async def register(
         school=payload.school,
         is_verified_email=bool(payload.email),
     )
+
+    if payload.email:
+        domain = payload.email.split('@')[1].lower()
+        allowed = [d.strip() for d in settings.ALLOWED_EMAIL_DOMAINS.split(",")]
+        if any(domain == d or domain.endswith("." + d) for d in allowed):
+            user.is_verified_school = True
+
     db.add(user)
     await db.flush()
 
@@ -174,9 +190,9 @@ async def refresh(payload: RefreshRequest, db: AsyncSession = Depends(get_db)) -
 
 @router.post("/logout", response_model=ApiResponse)
 async def logout(
-    current_user: User = Depends(get_current_user),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security_bearer),
     redis: Redis = Depends(get_redis),
 ) -> dict[str, Any]:
-    # The token is extracted in dependency; caller should also clear client storage.
-    # We black-list the token if possible; for simplicity rely on short expiry.
+    if credentials:
+        await blacklist_token(redis, credentials.credentials)
     return {"data": {"ok": True}}

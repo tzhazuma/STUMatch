@@ -15,6 +15,7 @@ os.environ["DATABASE_URL"] = (
 )
 os.environ["REDIS_URL"] = "redis://localhost:6379/15"
 os.environ["SECRET_KEY"] = "test-secret-key-change-in-production"
+os.environ["ALLOWED_EMAIL_DOMAINS"] = "example.com"
 os.environ["MAIL_PROVIDER"] = "mock"
 os.environ["STORAGE_PROVIDER"] = "local"
 os.environ["AI_PROVIDER"] = "deepseek"

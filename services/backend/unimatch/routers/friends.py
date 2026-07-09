@@ -58,7 +58,12 @@ async def list_requests(
         stmt = select(Friendship).where(Friendship.requester_id == current_user.id)
     result = await db.execute(stmt.order_by(Friendship.created_at.desc()))
     items = result.scalars().all()
-    return {"data": [FriendRequestOut.model_validate(r).model_dump() for r in items]}
+    return {
+        "data": {
+            "items": [FriendRequestOut.model_validate(r).model_dump() for r in items],
+            "total": len(items),
+        }
+    }
 
 
 @router.post("/requests/{request_id}/accept", response_model=ApiResponse)

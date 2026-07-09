@@ -1,4 +1,5 @@
 """REST chat routes: conversations, messages, send via REST."""
+import asyncio
 from typing import Any
 from uuid import UUID
 
@@ -115,7 +116,7 @@ async def send_message_rest(
 ) -> dict[str, Any]:
     conv = await _get_conversation(db, conversation_id, current_user.id)
     moderation = ModerationService()
-    check = moderation.check_text(payload.content, source="chat")
+    check = await asyncio.to_thread(moderation.check_text, payload.content, "chat")
     if check["triggered"]:
         raise HTTPException(status_code=400, detail="包含违禁词")
     message = Message(

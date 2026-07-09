@@ -17,7 +17,10 @@ class Settings(BaseSettings):
     # Application
     APP_NAME: str = "UniMatch"
     DEBUG: bool = False
-    SECRET_KEY: str = "change-me-in-production"
+    SECRET_KEY: str = ""
+
+    # Email domain whitelist
+    ALLOWED_EMAIL_DOMAINS: str = "shanghaitech.edu.cn"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
