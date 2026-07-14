@@ -65,7 +65,6 @@ async def seed_questionnaires() -> None:
                 "section": "academic",
                 "description": "完善学术交流资料，找到志同道合的研究伙伴。共 20 题，涵盖研究经验、兴趣方向、匹配偏好与个人偏好。",
                 "questions": [
-                    # 一、研究经验与能力（4 题）
                     {"id": "has_publication", "text": "是否有论文发表经历？", "type": "single_choice", "required": True, "options": [{"value": "是", "label": "是"}, {"value": "否", "label": "否"}]},
                     {"id": "publication_count", "text": "如有论文发表，发表了几篇？", "type": "single_choice", "required": False, "options": [{"value": "1篇", "label": "1篇"}, {"value": "2-3篇", "label": "2-3篇"}, {"value": "4篇及以上", "label": "4篇及以上"}]},
                     {"id": "research_methods", "text": "你擅长的研究方法", "type": "multiple_choice", "required": True, "options": [{"value": "理论分析", "label": "理论分析"}, {"value": "实验设计", "label": "实验设计"}, {"value": "数据挖掘", "label": "数据挖掘"}, {"value": "仿真模拟", "label": "仿真模拟"}, {"value": "田野调查", "label": "田野调查"}, {"value": "统计分析", "label": "统计分析"}, {"value": "机器学习建模", "label": "机器学习建模"}, {"value": "其他", "label": "其他"}]},
@@ -74,17 +73,14 @@ async def seed_questionnaires() -> None:
                     {"id": "experiment_design", "text": "实验设计能力自评（1-5分）", "type": "single_choice", "required": True, "options": [{"value": "1", "label": "1"}, {"value": "2", "label": "2"}, {"value": "3", "label": "3"}, {"value": "4", "label": "4"}, {"value": "5", "label": "5"}]},
                     {"id": "paper_writing", "text": "论文写作能力自评（1-5分）", "type": "single_choice", "required": True, "options": [{"value": "1", "label": "1"}, {"value": "2", "label": "2"}, {"value": "3", "label": "3"}, {"value": "4", "label": "4"}, {"value": "5", "label": "5"}]},
                     {"id": "coding_ability", "text": "代码能力自评（1-5分）", "type": "single_choice", "required": True, "options": [{"value": "1", "label": "1"}, {"value": "2", "label": "2"}, {"value": "3", "label": "3"}, {"value": "4", "label": "4"}, {"value": "5", "label": "5"}]},
-                    # 二、研究兴趣与方向（4 题）
                     {"id": "current_topic", "text": "你目前的研究课题/论文题目", "type": "text", "required": False},
                     {"id": "learn_direction", "text": "你希望拓展/学习的方向", "type": "text", "required": True},
                     {"id": "hot_interests", "text": "你感兴趣的热门领域", "type": "multiple_choice", "required": True, "options": [{"value": "AI与机器学习", "label": "AI与机器学习"}, {"value": "数据科学", "label": "数据科学"}, {"value": "生物信息", "label": "生物信息"}, {"value": "量子计算", "label": "量子计算"}, {"value": "网络安全", "label": "网络安全"}, {"value": "材料科学", "label": "材料科学"}, {"value": "环境科学", "label": "环境科学"}, {"value": "医学", "label": "医学"}, {"value": "数学", "label": "数学"}, {"value": "物理", "label": "物理"}, {"value": "化学", "label": "化学"}, {"value": "心理学", "label": "心理学"}, {"value": "社会学", "label": "社会学"}, {"value": "经济学", "label": "经济学"}, {"value": "其他", "label": "其他"}]},
                     {"id": "interdisciplinary", "text": "你希望交流的学科交叉方向", "type": "text", "required": False},
-                    # 三、匹配偏好（4 题）
                     {"id": "match_identity", "text": "你希望匹配什么身份的人", "type": "multiple_choice", "required": True, "options": [{"value": "同专业同学", "label": "同专业同学"}, {"value": "同专业学长学姐/前辈", "label": "同专业学长学姐/前辈"}, {"value": "跨专业互补", "label": "跨专业互补"}, {"value": "导师级别", "label": "导师级别"}]},
                     {"id": "match_purpose", "text": "你希望匹配的目的", "type": "multiple_choice", "required": True, "options": [{"value": "一起合作写论文", "label": "一起合作写论文"}, {"value": "指导实验方法", "label": "指导实验方法"}, {"value": "交流研究思路", "label": "交流研究思路"}, {"value": "请教学术问题", "label": "请教学术问题"}, {"value": "找科研伙伴", "label": "找科研伙伴"}, {"value": "跨学科合作", "label": "跨学科合作"}]},
                     {"id": "frequency", "text": "你希望交流的频率", "type": "single_choice", "required": True, "options": [{"value": "每周1次", "label": "每周1次"}, {"value": "每两周1次", "label": "每两周1次"}, {"value": "每月1次", "label": "每月1次"}, {"value": "灵活", "label": "灵活"}]},
                     {"id": "communication", "text": "你更偏向哪种交流方式", "type": "single_choice", "required": True, "options": [{"value": "线上文字", "label": "线上文字"}, {"value": "线上视频", "label": "线上视频"}, {"value": "线下见面", "label": "线下见面"}, {"value": "都可以", "label": "都可以"}]},
-                    # 四、个人偏好（4 题）
                     {"id": "available_time", "text": "你的可用时间段", "type": "multiple_choice", "required": True, "options": [{"value": "工作日上午", "label": "工作日上午"}, {"value": "下午", "label": "下午"}, {"value": "晚上", "label": "晚上"}, {"value": "周末", "label": "周末"}]},
                     {"id": "partner_count", "text": "你希望匹配多少位伙伴", "type": "single_choice", "required": True, "options": [{"value": "1-2位", "label": "1-2位"}, {"value": "3-5位", "label": "3-5位"}, {"value": "不限", "label": "不限"}]},
                     {"id": "english_ability", "text": "你的英语能力", "type": "single_choice", "required": True, "options": [{"value": "可阅读英文文献", "label": "可阅读英文文献"}, {"value": "可用英语交流", "label": "可用英语交流"}, {"value": "只能阅读", "label": "只能阅读"}, {"value": "英语+中文均可", "label": "英语+中文均可"}]},
