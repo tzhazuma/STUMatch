@@ -1,5 +1,4 @@
 """Message board routes for each section."""
-import asyncio
 from typing import Any
 from uuid import UUID
 
@@ -11,7 +10,7 @@ from unimatch.database import get_db
 from unimatch.models import MessageBoard, User
 from unimatch.schemas import ApiResponse, MessageBoardIn, MessageBoardOut
 from unimatch.security import get_current_user
-from unimatch.services.moderation import ModerationService
+from unimatch.services.moderation import ModerationService, load_moderation_configs
 
 router = APIRouter(prefix="/message-board", tags=["message-board"])
 
@@ -54,8 +53,9 @@ async def post_message(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict[str, Any]:
-    moderation = ModerationService()
-    check = await asyncio.to_thread(moderation.check_text, payload.content, "board")
+    configs = await load_moderation_configs(db)
+    moderation = ModerationService(extra_words=configs)
+    check = await moderation.async_moderate(payload.content, "board", db=db)
     if check["triggered"]:
         raise HTTPException(status_code=400, detail="包含违禁词")
     msg = MessageBoard(

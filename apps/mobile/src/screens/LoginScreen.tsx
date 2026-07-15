@@ -9,19 +9,22 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { RootNavigationProp } from '../navigation/types';
 import { useAuthStore } from '../store/authStore';
 import { API } from '../api/endpoints';
 
 export default function LoginScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<RootNavigationProp>();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
   const [nickname, setNickname] = useState('');
   const [school, setSchool] = useState('上海科技大学');
+  const [referralCode, setReferralCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [codeSent, setCodeSent] = useState(false);
+  const [agreed, setAgreed] = useState(false);
   const { setAuth } = useAuthStore();
 
   const sendCode = async () => {
@@ -39,13 +42,17 @@ export default function LoginScreen() {
   };
 
   const submit = async () => {
+    if (mode === 'register' && !agreed) {
+      Alert.alert('提示', '请先阅读并同意服务协议和隐私政策');
+      return;
+    }
     setLoading(true);
     try {
       let res;
       if (mode === 'login') {
         res = await API.auth.login(email, password);
       } else {
-        res = await API.auth.register({ email, code, password, nickname, school });
+        res = await API.auth.register({ email, code, password, nickname, school, referral_code: referralCode || undefined });
       }
       setAuth(res, res.user);
     } catch (e: any) {
@@ -103,6 +110,38 @@ export default function LoginScreen() {
           </View>
           <TextInput style={styles.input} placeholder="昵称" value={nickname} onChangeText={setNickname} />
           <TextInput style={styles.input} placeholder="学校" value={school} onChangeText={setSchool} />
+          <TextInput
+            style={styles.input}
+            placeholder="邀请码（选填）"
+            value={referralCode}
+            onChangeText={setReferralCode}
+            autoCapitalize="characters"
+          />
+          <TouchableOpacity
+            style={styles.agreeRow}
+            activeOpacity={0.7}
+            onPress={() => setAgreed((prev) => !prev)}
+          >
+            <View style={[styles.checkbox, agreed && styles.checkboxChecked]}>
+              {agreed && <Text style={styles.checkmark}>✓</Text>}
+            </View>
+            <Text style={styles.agreeText}>
+              我已阅读并同意
+              <Text
+                style={styles.link}
+                onPress={() => navigation.navigate('Legal', { doc: 'terms' })}
+              >
+                服务协议
+              </Text>
+              和
+              <Text
+                style={styles.link}
+                onPress={() => navigation.navigate('Legal', { doc: 'privacy' })}
+              >
+                隐私政策
+              </Text>
+            </Text>
+          </TouchableOpacity>
         </>
       )}
       <TextInput
@@ -120,6 +159,23 @@ export default function LoginScreen() {
           <Text style={styles.buttonText}>{mode === 'login' ? '登录' : '注册'}</Text>
         )}
       </TouchableOpacity>
+
+      <Text style={styles.footer}>
+        注册即表示同意
+        <Text
+          style={styles.link}
+          onPress={() => navigation.navigate('Legal', { doc: 'terms' })}
+        >
+          服务协议
+        </Text>
+        与
+        <Text
+          style={styles.link}
+          onPress={() => navigation.navigate('Legal', { doc: 'privacy' })}
+        >
+          隐私政策
+        </Text>
+      </Text>
     </View>
   );
 }
@@ -141,4 +197,14 @@ const styles = StyleSheet.create({
   codeBtnText: { color: '#fff', fontWeight: '600' },
   button: { backgroundColor: '#6366f1', padding: 14, borderRadius: 8, alignItems: 'center', marginTop: 8 },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  agreeRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 12, gap: 8 },
+  checkbox: {
+    width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: '#6366f1',
+    alignItems: 'center', justifyContent: 'center', marginTop: 1,
+  },
+  checkboxChecked: { backgroundColor: '#6366f1' },
+  checkmark: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
+  agreeText: { flex: 1, fontSize: 13, color: '#4b5563', lineHeight: 20 },
+  footer: { textAlign: 'center', fontSize: 12, color: '#9ca3af', marginTop: 16 },
+  link: { color: '#6366f1', fontWeight: '600' },
 });

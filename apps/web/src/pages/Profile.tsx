@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { Card } from '@/components/ui/Card';
-import { getMyProfile, updateProfile, uploadAvatar } from '@/api/endpoints';
+import { getMyProfile, updateProfile, uploadAvatar, getMyReferralCode } from '@/api/endpoints';
 import type { Profile } from '@/types';
 
 const educationOptions = [
@@ -27,11 +27,18 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
+  const [referral, setReferral] = useState<{ code: string; link: string } | null>(null);
 
   useEffect(() => {
     setLoading(true);
-    getMyProfile()
-      .then(setProfile)
+    Promise.all([
+      getMyProfile(),
+      getMyReferralCode().catch(() => null),
+    ])
+      .then(([p, r]) => {
+        setProfile(p);
+        if (r) setReferral({ code: r.code, link: r.link });
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -158,6 +165,47 @@ export default function ProfilePage() {
         <Button onClick={handleSave} isLoading={saving} className="w-full">
           保存
         </Button>
+      </Card>
+
+      <Card className="space-y-3">
+        <h2 className="font-semibold">邀请好友</h2>
+        {referral ? (
+          <>
+            <div className="flex items-center justify-between rounded-lg bg-gray-50 p-3">
+              <div>
+                <p className="text-xs text-gray-500">你的邀请码</p>
+                <p className="text-lg font-bold tracking-widest text-brand-600">{referral.code}</p>
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  navigator.clipboard.writeText(referral.code);
+                  setMessage('邀请码已复制');
+                }}
+              >
+                复制
+              </Button>
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs text-gray-500">邀请链接</p>
+              <p className="break-all text-sm text-gray-700">{referral.link}</p>
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full"
+              onClick={() => {
+                navigator.clipboard.writeText(referral.link);
+                setMessage('邀请链接已复制');
+              }}
+            >
+              复制邀请链接
+            </Button>
+          </>
+        ) : (
+          <p className="text-sm text-gray-500">加载邀请信息失败</p>
+        )}
       </Card>
     </div>
   );

@@ -12,7 +12,7 @@ export function useAuth() {
   }, [setAuth]);
 
   const registerAccount = useCallback(
-    async (payload: { email: string; code: string; password: string; nickname: string; school: string; phone?: string }) => {
+    async (payload: { email: string; code: string; password: string; nickname: string; school: string; phone?: string; referral_code?: string }) => {
       const res = await apiRegister({ phone: payload.phone, ...payload });
       setAuth(res);
       return res.user;

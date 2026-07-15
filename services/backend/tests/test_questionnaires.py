@@ -79,3 +79,93 @@ async def test_submit_response_unknown_questionnaire(client):
     )
     assert resp.status_code == 404
     assert resp.json()["detail"] == "questionnaire not found"
+
+
+VALID_QUESTION_TYPES = {"single_choice", "multiple_choice", "text", "rating", "tags", "date"}
+REQUIRED_QUESTION_FIELDS = {"id", "text", "type"}
+
+
+async def test_questionnaire_questions_have_valid_types(client):
+    """Every question uses a supported type and has required metadata."""
+    await register_user(client, "test-q-types@example.com", "password123", "Mia")
+    tokens = await login_user(client, "test-q-types@example.com", "password123")
+
+    resp = await client.get(
+        "/questionnaires",
+        headers={"Authorization": f"Bearer {tokens['access_token']}"},
+    )
+    assert resp.status_code == 200
+    for q in resp.json()["data"]:
+        assert len(q["questions"]) >= 1, f"{q['slug']} has no questions"
+        for question in q["questions"]:
+            assert REQUIRED_QUESTION_FIELDS <= set(question.keys())
+            assert question["type"] in VALID_QUESTION_TYPES
+            if question["type"] in {"single_choice", "multiple_choice"}:
+                assert question.get("options")
+                assert all("value" in opt and "label" in opt for opt in question["options"])
+
+
+async def test_basic_questionnaire_has_improved_questions(client):
+    """Basic questionnaire includes notification and verification questions."""
+    await register_user(client, "test-basic-q@example.com", "password123", "Noah")
+    tokens = await login_user(client, "test-basic-q@example.com", "password123")
+
+    resp = await client.get(
+        "/questionnaires/basic",
+        headers={"Authorization": f"Bearer {tokens['access_token']}"},
+    )
+    assert resp.status_code == 200
+    questions = {q["id"]: q for q in resp.json()["data"]["questions"]}
+    assert "notification_consent" in questions
+    assert "school_verification_preference" in questions
+    assert questions["birth_date"]["type"] == "date"
+
+
+async def test_academic_questionnaire_has_collaboration_style(client):
+    """Academic questionnaire includes collaboration style question."""
+    await register_user(client, "test-academic-q@example.com", "password123", "Olivia")
+    tokens = await login_user(client, "test-academic-q@example.com", "password123")
+
+    resp = await client.get(
+        "/questionnaires/academic",
+        headers={"Authorization": f"Bearer {tokens['access_token']}"},
+    )
+    assert resp.status_code == 200
+    questions = {q["id"]: q for q in resp.json()["data"]["questions"]}
+    assert "collaboration_style" in questions
+    assert questions["collaboration_style"]["type"] == "single_choice"
+
+
+async def test_daily_questionnaire_has_sports_and_dietary(client):
+    """Daily questionnaire includes sport/game and dietary preference questions."""
+    await register_user(client, "test-daily-q@example.com", "password123", "Parker")
+    tokens = await login_user(client, "test-daily-q@example.com", "password123")
+
+    resp = await client.get(
+        "/questionnaires/daily",
+        headers={"Authorization": f"Bearer {tokens['access_token']}"},
+    )
+    assert resp.status_code == 200
+    questions = {q["id"]: q for q in resp.json()["data"]["questions"]}
+    assert "favorite_sports" in questions
+    assert "dietary_preference" in questions
+    assert questions["favorite_sports"]["type"] == "multiple_choice"
+    assert questions["dietary_preference"]["type"] == "single_choice"
+
+
+async def test_dating_questionnaire_has_boundary_and_values(client):
+    """Dating questionnaire includes boundary respect and values ranking questions."""
+    await register_user(client, "test-dating-q@example.com", "password123", "Quinn")
+    tokens = await login_user(client, "test-dating-q@example.com", "password123")
+
+    resp = await client.get(
+        "/questionnaires/dating",
+        headers={"Authorization": f"Bearer {tokens['access_token']}"},
+    )
+    assert resp.status_code == 200
+    questions = {q["id"]: q for q in resp.json()["data"]["questions"]}
+    assert "boundary_respect" in questions
+    assert "long_distance_detail" in questions
+    assert "values_ranking" in questions
+    assert questions["boundary_respect"]["type"] == "single_choice"
+    assert questions["values_ranking"]["type"] == "text"

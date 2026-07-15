@@ -16,7 +16,7 @@ export const SAMPLE_QUESTIONNAIRES: Questionnaire[] = [
       { id: 'nickname', text: '昵称', type: 'text', required: true },
       { id: 'school', text: '学校', type: 'text', required: true },
       { id: 'gender', text: '性别', type: 'single_choice', required: true, options: [{ value: 'male', label: '男' }, { value: 'female', label: '女' }, { value: 'other', label: '其他' }] },
-      { id: 'birth_date', text: '出生日期', type: 'text', required: false },
+      { id: 'birth_date', text: '出生日期', type: 'date', required: false },
       { id: 'education_level', text: '学历', type: 'single_choice', required: true, options: [{ value: 'undergraduate', label: '本科' }, { value: 'master', label: '硕士' }, { value: 'phd', label: '博士' }, { value: 'other', label: '其他' }] },
     ],
   },
@@ -226,6 +226,16 @@ function QuestionInput({
           ))}
         </div>
       </div>
+    );
+  }
+
+  if (question.type === 'date') {
+    return (
+      <Input
+        type="date"
+        value={(value as string) || ''}
+        onChange={(e) => onChange(e.target.value)}
+      />
     );
   }
 

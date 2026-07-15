@@ -3,6 +3,7 @@ import { Layout } from '@/components/Layout';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import Login from '@/pages/Login';
 import Register from '@/pages/Register';
+import Legal from '@/pages/Legal';
 import Discovery from '@/pages/Discovery';
 import UserDetail from '@/pages/UserDetail';
 import Profile from '@/pages/Profile';
@@ -15,6 +16,7 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
+      <Route path="/legal/:doc" element={<Legal />} />
       <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route path="/discovery/:section?" element={<Discovery />} />
         <Route path="/discovery/:section/:userId" element={<UserDetail />} />

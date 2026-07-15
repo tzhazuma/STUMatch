@@ -1,0 +1,13 @@
+# AI service outputs
+outputs/
+*.gguf
+*.bin
+*.safetensors
+*.pt
+*.pth
+checkpoint-*/
+runs/
+wandb/
+__pycache__/
+*.py[cod]
+.env

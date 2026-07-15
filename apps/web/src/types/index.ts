@@ -84,7 +84,7 @@ export interface QuestionOption {
   label: string;
 }
 
-export type QuestionType = 'single_choice' | 'multiple_choice' | 'text' | 'rating' | 'tags';
+export type QuestionType = 'single_choice' | 'multiple_choice' | 'text' | 'rating' | 'tags' | 'date';
 
 export interface Question {
   id: string;

@@ -15,10 +15,12 @@ from unimatch.routers import (
     chat,
     discovery,
     friends,
+    legal,
     matches,
     message_board,
     profiles,
     questionnaires,
+    referrals,
     reports,
     users,
     ws,
@@ -57,6 +59,8 @@ async def seed_questionnaires() -> None:
                     {"id": "mbti", "text": "MBTI", "type": "single_choice", "required": False, "options": [{"value": "INTJ", "label": "INTJ"}, {"value": "INTP", "label": "INTP"}, {"value": "ENTJ", "label": "ENTJ"}, {"value": "ENTP", "label": "ENTP"}, {"value": "INFJ", "label": "INFJ"}, {"value": "INFP", "label": "INFP"}, {"value": "ENFJ", "label": "ENFJ"}, {"value": "ENFP", "label": "ENFP"}, {"value": "ISTJ", "label": "ISTJ"}, {"value": "ISFJ", "label": "ISFJ"}, {"value": "ESTJ", "label": "ESTJ"}, {"value": "ESFJ", "label": "ESFJ"}, {"value": "ISTP", "label": "ISTP"}, {"value": "ISFP", "label": "ISFP"}, {"value": "ESTP", "label": "ESTP"}, {"value": "ESFP", "label": "ESFP"}]},
                     {"id": "location", "text": "现居地", "type": "text", "required": False},
                     {"id": "bio", "text": "个人介绍", "type": "text", "required": False},
+                    {"id": "notification_consent", "text": "是否愿意接收匹配提醒与活动通知？", "type": "single_choice", "required": True, "options": [{"value": "yes_all", "label": "愿意接收所有通知"}, {"value": "yes_important", "label": "只接收重要通知"}, {"value": "no", "label": "暂不接收"}]},
+                    {"id": "school_verification_preference", "text": "你希望如何完成校园身份验证？", "type": "single_choice", "required": True, "options": [{"value": "edu_email", "label": "教育邮箱验证"}, {"value": "student_card", "label": "学生证/校园卡上传"}, {"value": "later", "label": "稍后再说"}]},
                 ],
             },
             {
@@ -78,6 +82,7 @@ async def seed_questionnaires() -> None:
                     {"id": "learn_direction", "text": "你希望继续学习或拓展哪些领域？", "type": "multiple_choice", "required": True, "options": [{"value": "AI机器学习", "label": "AI与机器学习"}, {"value": "数据科学", "label": "数据科学"}, {"value": "生物信息", "label": "生物信息"}, {"value": "量子计算", "label": "量子计算"}, {"value": "网络安全", "label": "网络安全"}, {"value": "材料科学", "label": "材料科学"}, {"value": "环境科学", "label": "环境科学"}, {"value": "医学", "label": "医学"}, {"value": "数学", "label": "数学"}, {"value": "物理", "label": "物理"}, {"value": "化学", "label": "化学"}, {"value": "心理学", "label": "心理学"}, {"value": "社会学", "label": "社会学"}, {"value": "经济学", "label": "经济学"}, {"value": "其他", "label": "其他"}]},
                     {"id": "interdisciplinary", "text": "你希望探索哪些学科交叉方向？", "type": "text", "required": False},
                     {"id": "academic_goal", "text": "你希望通过学术交流实现什么目标？", "type": "multiple_choice", "required": True, "options": [{"value": "请教学术问题", "label": "请教学术问题"}, {"value": "交流研究思路", "label": "交流研究思路"}, {"value": "学习方法工具", "label": "学习研究方法或工具"}, {"value": "找科研伙伴", "label": "寻找科研伙伴"}, {"value": "合作论文项目", "label": "合作完成论文或项目"}, {"value": "跨学科合作", "label": "跨学科合作"}, {"value": "了解升学科研", "label": "了解实验室/升学与科研经历"}, {"value": "其他", "label": "其他"}]},
+                    {"id": "collaboration_style", "text": "你更倾向哪种科研合作方式？", "type": "single_choice", "required": True, "options": [{"value": "独立主导", "label": "独立主导，他人协助"}, {"value": "平等合作", "label": "平等合作，共同推进"}, {"value": "加入团队", "label": "加入已有团队，承担子任务"}, {"value": "灵活", "label": "视项目而定"}]},
                     {"id": "match_identity", "text": "你希望匹配怎样的身份？", "type": "single_choice", "required": True, "options": [{"value": "同专业同学", "label": "同专业同学"}, {"value": "同专业前辈", "label": "同专业学长学姐/前辈"}, {"value": "跨专业互补", "label": "跨专业互补"}, {"value": "经验相近", "label": "经验相近"}, {"value": "不限", "label": "不限"}]},
                     {"id": "frequency", "text": "你希望交流的频率是？", "type": "single_choice", "required": True, "options": [{"value": "每周一次", "label": "每周一次"}, {"value": "每两周一次", "label": "每两周一次"}, {"value": "每月一次", "label": "每月一次"}, {"value": "灵活", "label": "灵活"}]},
                     {"id": "communication", "text": "你更偏向哪种交流方式？", "type": "single_choice", "required": True, "options": [{"value": "线上文字", "label": "线上文字"}, {"value": "线上语音视频", "label": "线上语音或视频"}, {"value": "线下见面", "label": "线下见面"}, {"value": "都可以", "label": "都可以"}]},
@@ -100,6 +105,8 @@ async def seed_questionnaires() -> None:
                     {"id": "social_style", "text": "你更喜欢哪种相处形式？（可多选）", "type": "multiple_choice", "required": True, "options": [{"value": "一对一", "label": "一对一相处"}, {"value": "3-5人小组", "label": "3—5 人小组"}, {"value": "多人活动", "label": "多人活动"}, {"value": "线上文字", "label": "线上文字聊天"}, {"value": "线上语音游戏", "label": "线上语音/游戏"}, {"value": "线下见面", "label": "线下见面"}, {"value": "先线上再线下", "label": "先线上熟悉再线下"}, {"value": "都可以", "label": "都可以"}]},
                     {"id": "social_pace", "text": "以下哪些描述更符合你的相处节奏？（可多选）", "type": "multiple_choice", "required": True, "options": [{"value": "提前规划", "label": "喜欢提前规划"}, {"value": "随性临时", "label": "比较随性，临时约也可以"}, {"value": "主动发起", "label": "主动发起活动"}, {"value": "习惯被约", "label": "更习惯别人发起"}, {"value": "高频聊天", "label": "喜欢高频聊天"}, {"value": "低频聊天", "label": "不需要频繁聊天"}, {"value": "慢热", "label": "慢热"}, {"value": "外向健谈", "label": "外向健谈"}, {"value": "重视守时", "label": "重视守时"}, {"value": "重视空间", "label": "重视个人空间"}]},
                     {"id": "consumption_pref", "text": "你的活动消费偏好更接近哪一种？", "type": "single_choice", "required": False, "options": [{"value": "低预算", "label": "尽量低预算或免费活动"}, {"value": "性价比", "label": "更看重性价比"}, {"value": "适中", "label": "预算适中，视活动而定"}, {"value": "体验优先", "label": "体验优先，预算较灵活"}, {"value": "不参与匹配", "label": "不希望以消费偏好参与匹配"}]},
+                    {"id": "favorite_sports", "text": "你平时参与或愿意尝试的运动/游戏项目是？（可多选）", "type": "multiple_choice", "required": False, "options": [{"value": "跑步", "label": "跑步/慢跑"}, {"value": "球类", "label": "篮球/足球/羽毛球等球类"}, {"value": "健身", "label": "健身/力量训练"}, {"value": "瑜伽", "label": "瑜伽/普拉提"}, {"value": "游泳", "label": "游泳"}, {"value": "骑行", "label": "骑行/滑板"}, {"value": "户外", "label": "徒步/登山"}, {"value": "电竞", "label": "电竞/主机游戏"}, {"value": "桌游", "label": "桌游/剧本娱乐"}, {"value": "棋牌", "label": "棋牌"}, {"value": "其他", "label": "其他"}]},
+                    {"id": "dietary_preference", "text": "你的饮食偏好是？", "type": "single_choice", "required": False, "options": [{"value": "无特殊", "label": "无特殊偏好"}, {"value": "素食", "label": "素食"}, {"value": "清真", "label": "清真"}, {"value": "低碳", "label": "低碳水/减脂餐"}, {"value": "辣", "label": "嗜辣"}, {"value": "清淡", "label": "清淡"}, {"value": "不挑食", "label": "不挑食，乐于尝试"}]},
                     {"id": "daily_bio", "text": "请用几句话介绍自己，或写下希望搭子提前知道的事项。", "type": "text", "required": False},
                 ],
             },
@@ -121,6 +128,9 @@ async def seed_questionnaires() -> None:
                     {"id": "relationship_pace", "text": "你希望的关系统奏是？", "type": "single_choice", "required": True, "options": [{"value": "慢慢了解", "label": "慢慢了解"}, {"value": "节奏适中", "label": "节奏适中"}, {"value": "较快确认", "label": "希望较快确认是否合适"}]},
                     {"id": "ideal_person_traits", "text": "你希望遇见怎样的人？（可多选）", "type": "multiple_choice", "required": True, "options": [{"value": "真诚可靠", "label": "真诚可靠"}, {"value": "善于沟通", "label": "善于沟通"}, {"value": "情绪稳定", "label": "情绪稳定"}, {"value": "有责任感", "label": "有责任感"}, {"value": "尊重边界", "label": "尊重边界"}, {"value": "共同兴趣", "label": "有共同兴趣"}, {"value": "生活积极", "label": "生活积极"}, {"value": "独立思考", "label": "有独立思考"}, {"value": "幽默有趣", "label": "幽默有趣"}, {"value": "目标感强", "label": "目标感强"}, {"value": "温和体贴", "label": "温和体贴"}, {"value": "其他", "label": "其他"}]},
                     {"id": "age_range_pref", "text": "你希望认识的对象年龄段是？", "type": "text", "required": False},
+                    {"id": "boundary_respect", "text": "在认识和交流中，你最看重以下哪一点？", "type": "single_choice", "required": True, "options": [{"value": "尊重边界", "label": "尊重个人边界，不越界追问"}, {"value": "真诚坦率", "label": "真诚坦率，及时表达想法"}, {"value": "循序渐进", "label": "循序渐进，不急于推进关系"}, {"value": "平等尊重", "label": "平等尊重，拒绝说教与评判"}]},
+                    {"id": "long_distance_detail", "text": "如果可以接受异地，你能接受的距离/频率是？", "type": "single_choice", "required": False, "options": [{"value": "同城不同校", "label": "同城不同校"}, {"value": "省内", "label": "省内，周末可见"}, {"value": "相邻省市", "label": "相邻省市，每月 1-2 次"}, {"value": "较远距离", "label": "较远距离，长假见面"}, {"value": "不接受", "label": "不接受异地"}]},
+                    {"id": "values_ranking", "text": "请简单列出你在亲密关系中最看重的 3 个价值观（如：信任、沟通、共同目标）。", "type": "text", "required": False},
                     {"id": "family_future", "text": "关于家庭关系与未来生活，你更接近哪些想法？（可多选）", "type": "multiple_choice", "required": False, "options": [{"value": "重视原生家庭", "label": "重视双方与原生家庭保持良好关系"}, {"value": "伴侣独立空间", "label": "更重视伴侣之间的独立空间"}, {"value": "有结婚意愿", "label": "未来有结婚意愿"}, {"value": "结婚未定", "label": "未来是否结婚尚未确定"}, {"value": "希望有孩子", "label": "希望未来有孩子"}, {"value": "生育未定", "label": "是否生育尚未确定"}, {"value": "共同成长", "label": "更重视共同成长与生活质量"}, {"value": "暂不讨论", "label": "暂时不想讨论长期规划"}, {"value": "其他", "label": "其他"}]},
                 ],
             },
@@ -153,6 +163,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(legal.router)
 app.include_router(users.router)
 app.include_router(profiles.router)
 app.include_router(discovery.router)
@@ -164,6 +175,7 @@ app.include_router(message_board.router)
 app.include_router(reports.router)
 app.include_router(admin.router)
 app.include_router(ai.router)
+app.include_router(referrals.router)
 app.include_router(ws.router)
 
 

@@ -3,15 +3,17 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from unimatch.database import get_db
-from unimatch.models import ModerationLog, Report, User
+from unimatch.models import ModerationConfig, ModerationLog, Report, User
 from unimatch.schemas import (
     AdminReportResolveIn,
     AdminUserStatusIn,
     ApiResponse,
+    ModerationConfigIn,
+    ModerationConfigOut,
     ReportOut,
     UserOut,
 )
@@ -103,3 +105,83 @@ async def list_moderation_logs(
     result = await db.execute(stmt)
     items = result.scalars().all()
     return {"data": {"items": [m.model_dump() for m in items], "total": len(items), "page": page, "limit": limit}}
+
+
+@router.get("/moderation-configs", response_model=ApiResponse)
+async def list_moderation_configs(
+    category: str | None = None,
+    page: int = 1,
+    limit: int = 50,
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(get_current_admin),
+) -> dict[str, Any]:
+    stmt = select(ModerationConfig)
+    if category:
+        stmt = stmt.where(ModerationConfig.category == category)
+    stmt = stmt.order_by(ModerationConfig.created_at.desc()).offset((page - 1) * limit).limit(limit)
+    result = await db.execute(stmt)
+    items = result.scalars().all()
+    count_stmt = select(func.count()).select_from(ModerationConfig)
+    if category:
+        count_stmt = count_stmt.where(ModerationConfig.category == category)
+    total = await db.scalar(count_stmt)
+    return {
+        "data": {
+            "items": [ModerationConfigOut.model_validate(c).model_dump() for c in items],
+            "total": total,
+            "page": page,
+            "limit": limit,
+        }
+    }
+
+
+@router.post("/moderation-configs", response_model=ApiResponse)
+async def create_moderation_config(
+    payload: ModerationConfigIn,
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(get_current_admin),
+) -> dict[str, Any]:
+    existing = await db.scalar(
+        select(ModerationConfig).where(ModerationConfig.word == payload.word)
+    )
+    if existing:
+        raise HTTPException(status_code=409, detail="word already exists")
+    config = ModerationConfig(
+        word=payload.word,
+        category=payload.category,
+        severity=payload.severity,
+        enabled=payload.enabled,
+    )
+    db.add(config)
+    await db.commit()
+    await db.refresh(config)
+    return {"data": ModerationConfigOut.model_validate(config).model_dump()}
+
+
+@router.delete("/moderation-configs/{config_id}", response_model=ApiResponse)
+async def delete_moderation_config(
+    config_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(get_current_admin),
+) -> dict[str, Any]:
+    config = await db.get(ModerationConfig, config_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="config not found")
+    await db.delete(config)
+    await db.commit()
+    return {"data": {"deleted": True}}
+
+
+@router.put("/moderation-configs/{config_id}/toggle", response_model=ApiResponse)
+async def toggle_moderation_config(
+    config_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(get_current_admin),
+) -> dict[str, Any]:
+    config = await db.get(ModerationConfig, config_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="config not found")
+    config.enabled = not config.enabled
+    await db.commit()
+    await db.refresh(config)
+    return {"data": ModerationConfigOut.model_validate(config).model_dump()}

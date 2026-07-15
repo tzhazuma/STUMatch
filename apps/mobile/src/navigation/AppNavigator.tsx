@@ -15,6 +15,7 @@ import FriendsScreen from '../screens/FriendsScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import QuestionnaireScreen from '../screens/QuestionnaireScreen';
 import ChatScreen from '../screens/ChatScreen';
+import LegalScreen from '../screens/LegalScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
@@ -110,6 +111,11 @@ export default function AppNavigator() {
               name="Questionnaire"
               component={QuestionnaireScreen}
               options={{ title: '问卷' }}
+            />
+            <Stack.Screen
+              name="Legal"
+              component={LegalScreen}
+              options={{ title: '法律条款' }}
             />
           </>
         ) : (

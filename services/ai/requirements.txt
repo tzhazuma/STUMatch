@@ -1,0 +1,26 @@
+# AI training / offline retraining dependencies for UniMatch
+# Install in a dedicated environment (e.g. conda env unimatch-qlora).
+# These packages are NOT required for the backend runtime.
+
+# Core deep-learning stack
+torch>=2.1.0
+transformers>=4.40.0
+datasets>=2.14.0
+accelerate>=0.30.0
+
+# QLoRA / PEFT
+peft>=0.11.0
+bitsandbytes>=0.43.0
+trl>=0.9.0
+
+# Optional: unsloth fast training path
+# pip install "unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git"
+
+# Database access (mirrors backend drivers)
+numpy>=1.26.0
+sqlalchemy[asyncio]>=2.0.31
+asyncpg>=0.29.0
+psycopg2-binary>=2.9.0
+
+# Utilities
+python-dotenv>=1.0.0

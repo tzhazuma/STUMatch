@@ -43,6 +43,14 @@ postgres-data/
 redis-data/
 minio-data/
 
+# AI generated artifacts
+services/ai/outputs/*.json
+services/ai/outputs/*.bin
+services/ai/outputs/*.gguf
+services/ai/outputs/*.safetensors
+services/ai/outputs/*.pt
+services/ai/outputs/*.ckpt
+
 # Logs
 *.log
 

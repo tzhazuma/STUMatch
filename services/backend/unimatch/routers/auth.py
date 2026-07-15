@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from unimatch.config import get_settings
 from unimatch.database import get_db
-from unimatch.models import Profile, User
+from unimatch.models import Profile, Referral, User, UserConsent
 from unimatch.schemas import (
     ApiResponse,
     LoginRequest,
@@ -41,6 +41,50 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 settings = get_settings()
+
+
+class _RegisterRequest(RegisterRequest):
+    """Register request extended with an optional referral code.
+
+    Defined locally because the shared RegisterRequest schema is kept minimal.
+    """
+
+    referral_code: str | None = None
+
+
+async def _apply_referral_code(db: AsyncSession, user: User, code: str | None) -> None:
+    """Apply a referral code for a newly registered user, if provided and valid."""
+    if not code:
+        return
+    code = code.strip().upper()
+    if not code:
+        return
+
+    try:
+        result = await db.execute(select(Referral).where(Referral.code == code))
+        referral = result.scalar_one_or_none()
+        if not referral:
+            logger.warning("Referral code not found during registration: %s", code)
+            return
+        if referral.inviter_id == user.id:
+            logger.warning("User attempted to use their own referral code: %s", user.id)
+            return
+        if referral.status != "pending":
+            logger.warning("Referral code already used: %s", code)
+            return
+        referral.invitee_id = user.id
+        referral.status = "used"
+        await db.commit()
+    except Exception:
+        logger.exception("Failed to apply referral code: %s", code)
+        await db.rollback()
+
+
+async def _record_user_consents(db: AsyncSession, user: User) -> None:
+    """Record that the user has granted the required legal consents."""
+    db.add(UserConsent(user_id=user.id, consent_type="terms_of_service", granted=True))
+    db.add(UserConsent(user_id=user.id, consent_type="privacy_policy", granted=True))
+    await db.commit()
 
 
 def _code_key(target: str, purpose: str) -> str:
@@ -77,7 +121,7 @@ async def send_verification_code(
 
 @router.post("/register", response_model=ApiResponse)
 async def register(
-    payload: RegisterRequest,
+    payload: _RegisterRequest,
     db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis),
 ) -> dict[str, Any]:
@@ -119,6 +163,9 @@ async def register(
     db.add(profile)
     await db.commit()
     await db.refresh(user)
+
+    await _apply_referral_code(db, user, payload.referral_code)
+    await _record_user_consents(db, user)
 
     access_token = create_access_token(str(user.id))
     refresh_token = create_refresh_token(str(user.id))

@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
+  Share,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { API } from '../api/endpoints';
@@ -17,9 +18,17 @@ export default function ProfileScreen() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [referral, setReferral] = useState<{ code: string; link: string } | null>(null);
 
   useEffect(() => {
-    API.profile.getMyProfile().then((p) => { setProfile(p); setLoading(false); });
+    Promise.all([
+      API.profile.getMyProfile(),
+      API.referrals.getMyCode().catch(() => null),
+    ]).then(([p, r]) => {
+      setProfile(p);
+      if (r) setReferral({ code: r.code, link: r.link });
+      setLoading(false);
+    });
   }, []);
 
   const update = (field: keyof Profile, value: string | string[]) => {
@@ -133,6 +142,37 @@ export default function ProfileScreen() {
       <TouchableOpacity style={styles.btn} onPress={save} disabled={saving}>
         {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>保存</Text>}
       </TouchableOpacity>
+
+      <View style={styles.referralCard}>
+        <Text style={styles.referralTitle}>邀请好友</Text>
+        {referral ? (
+          <>
+            <View style={styles.codeRow}>
+              <View>
+                <Text style={styles.referralLabel}>你的邀请码</Text>
+                <Text style={styles.codeText}>{referral.code}</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.codeBtn}
+                onPress={() => Share.share({ message: referral.code })}
+              >
+                <Text style={styles.codeBtnText}>分享</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.referralLabel}>邀请链接</Text>
+            <Text style={styles.linkText} numberOfLines={2}>{referral.link}</Text>
+            <TouchableOpacity
+              style={[styles.codeBtn, { marginTop: 8 }]}
+              onPress={() => Share.share({ message: referral.link })}
+            >
+              <Text style={styles.codeBtnText}>分享邀请链接</Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          <Text style={styles.referralLabel}>加载邀请信息失败</Text>
+        )}
+      </View>
+
       <View style={{ height: 32 }} />
     </ScrollView>
   );
@@ -149,4 +189,19 @@ const styles = StyleSheet.create({
   input: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 8, padding: 10, fontSize: 15 },
   btn: { backgroundColor: '#6366f1', padding: 14, borderRadius: 8, alignItems: 'center', marginTop: 20 },
   btnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  referralCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  referralTitle: { fontSize: 16, fontWeight: '600', color: '#111827', marginBottom: 12 },
+  referralLabel: { fontSize: 12, color: '#6b7280', marginBottom: 4 },
+  codeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  codeText: { fontSize: 22, fontWeight: 'bold', color: '#6366f1', letterSpacing: 2 },
+  linkText: { fontSize: 13, color: '#374151', marginBottom: 8 },
+  codeBtn: { backgroundColor: '#6366f1', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
+  codeBtnText: { color: '#fff', fontWeight: '600' },
 });

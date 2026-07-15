@@ -32,6 +32,21 @@ interface RegisterPayload extends LoginPayload {
   code: string;
   nickname: string;
   school: string;
+  referral_code?: string;
+}
+
+interface ReferralCode {
+  code: string;
+  link: string;
+  status: string;
+  invitee_id?: string;
+  created_at: string;
+}
+
+interface ReferralStats {
+  total_sent: number;
+  total_used: number;
+  total_rewarded: number;
 }
 
 interface SendCodePayload {
@@ -57,6 +72,12 @@ interface FeedbackPayload {
 interface ConsentPayload {
   consent_type: string;
   granted: boolean;
+}
+
+interface LegalDoc {
+  title: string;
+  content: string;
+  updated_at: string;
 }
 
 async function get<T>(url: string, config?: object) {
@@ -93,6 +114,10 @@ export const refreshAccessToken = (refresh_token: string) =>
   post<Tokens>('/auth/refresh', { refresh_token });
 
 export const logout = () => post('/auth/logout');
+
+// Legal
+export const getLegalDoc = (doc: 'terms' | 'privacy') =>
+  get<LegalDoc>(`/legal/${doc}`);
 
 // Me
 export const getMe = () => get<User>('/users/me');
@@ -175,3 +200,8 @@ export const createReport = (payload: {
   reason: string;
   description?: string;
 }) => post('/reports', payload);
+
+// Referrals
+export const getMyReferralCode = () => get<ReferralCode>('/referrals/me');
+export const applyReferralCode = (code: string) => post('/referrals/apply', { code });
+export const getReferralStats = () => get<ReferralStats>('/referrals/stats');

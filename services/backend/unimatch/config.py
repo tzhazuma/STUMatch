@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     SECRET_KEY: str = ""
 
+    # Frontend
+    FRONTEND_URL: str = "http://localhost:5173"
+
     # Email domain whitelist
     ALLOWED_EMAIL_DOMAINS: str = "shanghaitech.edu.cn"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
@@ -75,7 +78,13 @@ class Settings(BaseSettings):
     MIMO_BASE_URL: str = "https://api.mimo.example.com/v1"
     MIMO_MODEL: str = "mimo-7b"
 
+    # Matching / Recommendations
+    EMBEDDING_MODEL: Optional[str] = None  # e.g. BAAI/bge-m3; disabled by default
+    RECOMMENDATION_WEIGHTS_PATH: str = "services/ai/outputs/recommendation_weights.json"
+    MMR_LAMBDA: float = 0.7  # 1.0 = relevance only, 0.0 = diversity only
+
     # Moderation
+    MODERATION_PROVIDER: Optional[str] = None  # openai, aliyun, tencent
     MODERATION_SENSITIVE_WORDS: Optional[str] = None  # comma-separated
 
     # Celery

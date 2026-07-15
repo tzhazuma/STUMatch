@@ -131,9 +131,11 @@ export interface Questionnaire {
 export interface QuestionnaireQuestion {
   id: string;
   text: string;
-  type: 'single_choice' | 'multiple_choice' | 'text';
+  type: 'single_choice' | 'multiple_choice' | 'text' | 'date' | 'rating' | 'tags';
   options?: { value: string; label: string }[];
   required?: boolean;
+  max?: number;
+  min?: number;
 }
 
 export interface QuestionnaireDefinition {

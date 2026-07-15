@@ -1,5 +1,10 @@
+"""Matching service: rule + vector + Two-Tower + feedback + MMR reranking."""
+import json
 import logging
+import math
 import random
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 from uuid import UUID
 
@@ -8,7 +13,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from unimatch.config import get_settings
-from unimatch.models import Profile, QuestionnaireResponse, User
+from unimatch.models import MatchFeedback, Profile, QuestionnaireResponse, User
 from unimatch.schemas import DiscoveryUser
 
 logger = logging.getLogger(__name__)
@@ -28,6 +33,39 @@ SECTION_RULES = {
     },
 }
 
+# Module-level cache for the optional semantic embedding model.  This avoids
+# reloading the transformer on every recommendation request.
+_EMBEDDING_MODEL = None
+_EMBEDDING_MODEL_NAME: str | None = None
+
+
+def _project_root() -> Path:
+    """Return the repository root: four parents above this file."""
+    return Path(__file__).resolve().parents[4]
+
+
+def _resolve_weights_path(path: str | None) -> Path | None:
+    """Resolve a possibly-relative recommendation weights path."""
+    if not path:
+        return None
+    p = Path(path)
+    if not p.is_absolute():
+        p = _project_root() / p
+    return p
+
+
+def _cosine_similarity(a: list[float] | None, b: list[float] | None) -> float:
+    """Cosine similarity between two vectors, safe for missing/empty vectors."""
+    if not a or not b:
+        return 0.0
+    va = np.array(a, dtype=np.float32)
+    vb = np.array(b, dtype=np.float32)
+    na = np.linalg.norm(va)
+    nb = np.linalg.norm(vb)
+    if na == 0 or nb == 0:
+        return 0.0
+    return float(np.dot(va, vb) / (na * nb))
+
 
 def _vector_distance_sql(vector: list[float]) -> text:
     """Return a SQL fragment for cosine distance against a pgvector column."""
@@ -35,9 +73,94 @@ def _vector_distance_sql(vector: list[float]) -> text:
     return text(f"profile_vector <=> '{vector_str}'::vector")
 
 
+class TwoTowerScorer:
+    """Lightweight two-tower scorer loaded from a JSON weights file.
+
+    Expected JSON shape::
+
+        {
+            "user_embeddings": {"<user_id>": [ ... ]},
+            "item_embeddings": {"<user_id>": [ ... ]},
+            "mlp": {
+                "W1": [[ ... ]],
+                "b1": [ ... ],
+                "W2": [[ ... ]],
+                "b2": [ ... ]
+            }
+        }
+
+    If ``mlp`` is absent, a simple dot-product followed by a sigmoid is used.
+    """
+
+    def __init__(self, weights_path: str | None = None):
+        self.weights: dict[str, Any] | None = None
+        self.user_embeddings: dict[str, list[float]] = {}
+        self.item_embeddings: dict[str, list[float]] = {}
+        self.mlp: dict[str, Any] | None = None
+        self._load(weights_path)
+
+    def _load(self, path: str | None) -> None:
+        p = _resolve_weights_path(path)
+        if p is None or not p.exists():
+            return
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+            self.weights = data
+            self.user_embeddings = data.get("user_embeddings") or {}
+            self.item_embeddings = data.get("item_embeddings") or {}
+            self.mlp = data.get("mlp")
+            logger.info("Loaded Two-Tower weights from %s", p)
+        except Exception as exc:  # pragma: no cover
+            logger.warning("Failed to load recommendation weights from %s: %s", p, exc)
+            self.weights = None
+
+    def _sigmoid(self, x: float) -> float:
+        return 1.0 / (1.0 + math.exp(-x))
+
+    def _mlp_forward(self, x: np.ndarray) -> float:
+        W1 = np.array(self.mlp["W1"], dtype=np.float32)
+        b1 = np.array(self.mlp["b1"], dtype=np.float32)
+        W2 = np.array(self.mlp["W2"], dtype=np.float32)
+        b2 = np.array(self.mlp["b2"], dtype=np.float32)
+        h = np.maximum(0.0, W1 @ x + b1)  # ReLU
+        out = float(W2 @ h + b2)
+        # Treat scalar output as logit.
+        return self._sigmoid(out)
+
+    def score(self, user_id: UUID, candidate_id: UUID) -> float | None:
+        """Return a score in [0, 1] or ``None`` if weights/embeddings are missing."""
+        if self.weights is None:
+            return None
+        u = self.user_embeddings.get(str(user_id))
+        v = self.item_embeddings.get(str(candidate_id))
+        if u is None or v is None:
+            return None
+
+        try:
+            u_vec = np.array(u, dtype=np.float32)
+            v_vec = np.array(v, dtype=np.float32)
+            # Normalise each tower output.
+            for vec in (u_vec, v_vec):
+                norm = np.linalg.norm(vec)
+                if norm > 0:
+                    vec /= norm
+
+            if self.mlp:
+                x = np.concatenate([u_vec, v_vec])
+                return self._mlp_forward(x)
+
+            dot = float(np.dot(u_vec, v_vec))
+            return self._sigmoid(dot)
+        except Exception as exc:  # pragma: no cover
+            logger.warning("TwoTower score computation failed: %s", exc)
+            return None
+
+
 class MatchingService:
     def __init__(self, db: AsyncSession):
         self.db = db
+        self.settings = get_settings()
+        self.two_tower = TwoTowerScorer(self.settings.RECOMMENDATION_WEIGHTS_PATH)
 
     async def _build_user_vector(self, user_id: UUID) -> list[float] | None:
         """Build a simple vector from profile and questionnaire responses."""
@@ -47,11 +170,82 @@ class MatchingService:
             return None
         return profile.profile_vector
 
+    def _build_profile_text(self, my_profile: Profile, user_id: UUID, responses: list[QuestionnaireResponse]) -> str:
+        """Concatenate profile fields and questionnaire answers into a single text."""
+        parts = [
+            my_profile.school,
+            my_profile.major,
+            my_profile.education_level.value if my_profile.education_level else None,
+            my_profile.mbti,
+            " ".join(my_profile.interests or []),
+            my_profile.location,
+            my_profile.bio,
+            my_profile.research_direction,
+            my_profile.dating_purpose,
+            my_profile.ideal_person,
+        ]
+        text_parts = [str(p) for p in parts if p]
+        for resp in responses:
+            for value in (resp.answers or {}).values():
+                if isinstance(value, list):
+                    text_parts.append(" ".join(str(v) for v in value))
+                else:
+                    text_parts.append(str(value))
+        return " ".join(text_parts)
+
+    async def _load_embedding_model(self) -> Any | None:
+        """Lazy-load the sentence-transformers model if configured."""
+        global _EMBEDDING_MODEL, _EMBEDDING_MODEL_NAME
+        model_name = self.settings.EMBEDDING_MODEL
+        if not model_name:
+            return None
+        if _EMBEDDING_MODEL is not None and _EMBEDDING_MODEL_NAME == model_name:
+            return _EMBEDDING_MODEL
+        try:
+            from sentence_transformers import SentenceTransformer
+        except ImportError:
+            logger.warning(
+                "EMBEDDING_MODEL is set to %r but sentence-transformers is not installed. "
+                "Falling back to hash-vector.",
+                model_name,
+            )
+            return None
+        try:
+            _EMBEDDING_MODEL = SentenceTransformer(model_name, trust_remote_code=True)
+            _EMBEDDING_MODEL_NAME = model_name
+            logger.info("Loaded embedding model %s", model_name)
+            return _EMBEDDING_MODEL
+        except Exception as exc:  # pragma: no cover
+            logger.warning("Failed to load embedding model %s: %s", model_name, exc)
+            return None
+
     async def _text_to_vector(self, text: str) -> list[float]:
-        """Simple rule-based vector for MVP; later replaced by BGE-M3 embeddings."""
-        dim = get_settings().VECTOR_DIMENSION
-        # deterministic hash-based vector: not semantically meaningful but gives a stable
-        # similarity score for matching when real embeddings are unavailable.
+        """Generate a profile vector.
+
+        If ``EMBEDDING_MODEL`` is set and sentence-transformers is available, use it.
+        Otherwise fall back to the deterministic hash-based vector used in the MVP.
+        The result is always normalised to ``VECTOR_DIMENSION`` so it fits the
+        ``pgvector`` column regardless of model output size.
+        """
+        dim = self.settings.VECTOR_DIMENSION
+        model = await self._load_embedding_model()
+        if model is not None:
+            try:
+                embedding = model.encode(text, normalize_embeddings=True)
+                embedding = embedding.astype(np.float32)
+                # Adapt model dimension to the configured vector dimension.
+                if len(embedding) > dim:
+                    embedding = embedding[:dim]
+                elif len(embedding) < dim:
+                    embedding = np.pad(embedding, (0, dim - len(embedding)), mode="constant")
+                norm = np.linalg.norm(embedding)
+                if norm > 0:
+                    embedding = embedding / norm
+                return embedding.tolist()
+            except Exception as exc:  # pragma: no cover
+                logger.warning("Embedding inference failed, falling back to hash vector: %s", exc)
+
+        # Deterministic hash-based fallback.
         vec = np.zeros(dim, dtype=np.float32)
         for i, ch in enumerate(text):
             vec[(i + ord(ch)) % dim] += 1.0
@@ -59,90 +253,6 @@ class MatchingService:
         if norm == 0:
             return vec.tolist()
         return (vec / norm).tolist()
-
-    async def recommend(
-        self,
-        user_id: UUID,
-        section: str,
-        limit: int = 10,
-    ) -> list[DiscoveryUser]:
-        """Return top recommendations combining vector similarity and rule scoring."""
-        result = await self.db.execute(select(Profile).where(Profile.user_id == user_id))
-        my_profile = result.scalar_one_or_none()
-        if not my_profile:
-            return []
-
-        # Build or refresh profile vector from current text
-        profile_text = " ".join(
-            str(x)
-            for x in [
-                my_profile.school,
-                my_profile.major,
-                my_profile.education_level,
-                my_profile.mbti,
-                " ".join(my_profile.interests or []),
-                my_profile.location,
-                my_profile.bio,
-                my_profile.research_direction,
-                my_profile.dating_purpose,
-                my_profile.ideal_person,
-            ]
-            if x
-        )
-
-        # Include questionnaire responses in the vector text
-        q_res = await self.db.execute(
-            select(QuestionnaireResponse).where(QuestionnaireResponse.user_id == user_id)
-        )
-        responses = q_res.scalars().all()
-        for resp in responses:
-            for value in (resp.answers or {}).values():
-                if isinstance(value, list):
-                    profile_text += " " + " ".join(str(v) for v in value)
-                else:
-                    profile_text += " " + str(value)
-
-        vector = await self._text_to_vector(profile_text)
-        my_profile.profile_vector = vector
-        await self.db.flush()
-
-        # Query candidates excluding self and inactive users
-        distance = _vector_distance_sql(vector)
-        stmt = (
-            select(Profile, User, distance.label("distance"))
-            .join(User, User.id == Profile.user_id)
-            .where(User.id != user_id, User.status == "active")
-            .order_by(text("distance ASC"))
-            .limit(200)
-        )
-        rows = await self.db.execute(stmt)
-        candidates = []
-        for row in rows.all():
-            profile, user, distance_val = row
-            if profile is None or user is None:
-                continue
-            score = max(0.0, 1.0 - (distance_val or 0.0))
-            rule_score, reason = self._rule_score(section, my_profile, profile)
-            final_score = min(1.0, score * 0.7 + rule_score * 0.3)
-            candidates.append((profile, user, final_score, reason))
-
-        candidates.sort(key=lambda x: x[2], reverse=True)
-        top = candidates[:limit]
-        return [
-            DiscoveryUser(
-                user_id=profile.user_id,
-                nickname=user.nickname,
-                avatar_url=profile.avatar_url,
-                age=profile.age,
-                education_level=profile.education_level.value if profile.education_level else None,
-                major=profile.major,
-                interests=profile.interests or [],
-                location=profile.location,
-                match_score=round(score, 3),
-                match_reason=reason,
-            )
-            for profile, user, score, reason in top
-        ]
 
     def _rule_score(
         self, section: str, me: Profile, other: Profile
@@ -186,6 +296,159 @@ class MatchingService:
         if not reasons:
             reasons.append("有潜在匹配")
         return score, "、".join(reasons)
+
+    @staticmethod
+    def _mmr_rerank(
+        items: list[tuple[Any, list[float] | None, float]],
+        lambda_param: float,
+        limit: int,
+    ) -> list[Any]:
+        """Maximal Marginal Relevance reranking.
+
+        ``items`` is a list of ``(payload, vector, relevance_score)``.  The
+        returned list contains the selected payloads in display order.
+        """
+        if not items:
+            return []
+        if lambda_param < 0:
+            lambda_param = 0.0
+        if lambda_param > 1:
+            lambda_param = 1.0
+
+        remaining = list(range(len(items)))
+        selected: list[int] = []
+
+        # First pick: highest relevance.
+        first_idx = max(remaining, key=lambda i: items[i][2])
+        selected.append(first_idx)
+        remaining.remove(first_idx)
+
+        while remaining and len(selected) < limit:
+            best_idx: int | None = None
+            best_score = -float("inf")
+            for idx in remaining:
+                _, vec, relevance = items[idx]
+                max_sim = max(
+                    (_cosine_similarity(vec, items[s][1]) for s in selected),
+                    default=0.0,
+                )
+                mmr_score = lambda_param * relevance - (1.0 - lambda_param) * max_sim
+                if mmr_score > best_score:
+                    best_score = mmr_score
+                    best_idx = idx
+            if best_idx is None:
+                break
+            selected.append(best_idx)
+            remaining.remove(best_idx)
+
+        return [items[i][0] for i in selected]
+
+    async def _feedback_adjustments(self, user_id: UUID) -> dict[UUID, float]:
+        """Build a map of target_user_id -> time-decayed score adjustment."""
+        result = await self.db.execute(
+            select(MatchFeedback).where(MatchFeedback.user_id == user_id)
+        )
+        feedbacks = result.scalars().all()
+        now = datetime.now(timezone.utc)
+        adjustments: dict[UUID, float] = {}
+        halflife_days = 30.0
+        action_weights = {
+            "like": 0.20,
+            "dislike": -0.30,
+            "skip": -0.05,
+        }
+        for fb in feedbacks:
+            delta = action_weights.get(fb.action, 0.0)
+            if fb.created_at is None:
+                decay = 1.0
+            else:
+                # created_at is timezone-aware (server_default now()).
+                days = max(0.0, (now - fb.created_at).total_seconds() / 86400.0)
+                decay = math.exp(-days / halflife_days)
+            adjustments[fb.target_user_id] = delta * decay
+        return adjustments
+
+    async def recommend(
+        self,
+        user_id: UUID,
+        section: str,
+        limit: int = 10,
+    ) -> list[DiscoveryUser]:
+        """Return top recommendations combining vector, rules, two-tower, feedback and MMR."""
+        result = await self.db.execute(select(Profile).where(Profile.user_id == user_id))
+        my_profile = result.scalar_one_or_none()
+        if not my_profile:
+            return []
+
+        q_res = await self.db.execute(
+            select(QuestionnaireResponse).where(QuestionnaireResponse.user_id == user_id)
+        )
+        responses = list(q_res.scalars().all())
+        profile_text = self._build_profile_text(my_profile, user_id, responses)
+
+        vector = await self._text_to_vector(profile_text)
+        my_profile.profile_vector = vector
+        await self.db.flush()
+
+        # Query candidates excluding self and inactive users, requiring a vector.
+        distance = _vector_distance_sql(vector)
+        stmt = (
+            select(Profile, User, distance.label("distance"))
+            .join(User, User.id == Profile.user_id)
+            .where(
+                User.id != user_id,
+                User.status == "active",
+                Profile.profile_vector.is_not(None),
+            )
+            .order_by(text("distance ASC"))
+            .limit(200)
+        )
+        rows = await self.db.execute(stmt)
+
+        feedback_adj = await self._feedback_adjustments(user_id)
+
+        candidates = []
+        for row in rows.all():
+            profile, user, distance_val = row
+            if profile is None or user is None:
+                continue
+            base_score = max(0.0, 1.0 - (distance_val or 0.0))
+            rule_score, reason = self._rule_score(section, my_profile, profile)
+
+            tower_score = self.two_tower.score(user_id, profile.user_id)
+            if tower_score is not None:
+                final_score = base_score * 0.50 + rule_score * 0.30 + tower_score * 0.20
+            else:
+                final_score = base_score * 0.70 + rule_score * 0.30
+
+            # Apply explicit feedback with exponential time decay.
+            adjustment = feedback_adj.get(profile.user_id, 0.0)
+            final_score = max(0.0, min(1.0, final_score + adjustment))
+
+            candidates.append((profile, user, final_score, reason))
+
+        # Prepare MMR inputs: payload = candidate tuple, vector = profile vector.
+        mmr_items = [
+            (cand, cand[0].profile_vector, cand[2]) for cand in candidates
+        ]
+        lambda_param = self.settings.MMR_LAMBDA
+        top = self._mmr_rerank(mmr_items, lambda_param, limit)
+
+        return [
+            DiscoveryUser(
+                user_id=profile.user_id,
+                nickname=user.nickname,
+                avatar_url=profile.avatar_url,
+                age=profile.age,
+                education_level=profile.education_level.value if profile.education_level else None,
+                major=profile.major,
+                interests=profile.interests or [],
+                location=profile.location,
+                match_score=round(score, 3),
+                match_reason=reason,
+            )
+            for profile, user, score, reason in top
+        ]
 
     async def discover(
         self,

@@ -56,13 +56,16 @@ UniMatch 是一个面向上海科技大学及类似高校学生的**校内同学
 
 ### 2.4 匹配推荐
 
-- **第一期**：规则 + `pgvector` 向量相似度。
+- **第一期**：规则 + `pgvector` 向量相似度 + 显式反馈 + MMR 多样性重排 + 可选 Two-Tower 模型。
   - 学术：先专业，再学历，再学校。
   - 日常：先兴趣，再年龄。
   - 恋爱：先年龄差 ≤ 2，再兴趣，再同城。
+- 向量生成：默认使用确定性哈希向量作为 MVP 兜底；当环境变量 `EMBEDDING_MODEL` 设置时（如 `BAAI/bge-m3`），使用 `sentence-transformers` 生成语义 embedding，并适配到配置的 `VECTOR_DIMENSION`。
+- Two-Tower：如果 `services/ai/outputs/recommendation_weights.json` 存在，加载用户/物品塔向量与可选 MLP 权重，产生候选得分；否则回退到规则分。
+- 反馈：用户对推荐反馈（喜欢 / 不喜欢 / 跳过）会以时间衰减方式调整后续推荐得分。
+- MMR：通过 `MMR_LAMBDA` 在相关性与多样性之间折中，避免推荐结果过度同质化。
 - 开启推送后，优先展示系统选出的 Top 10 高匹配用户，其余随机排列。
-- 用户可对推荐反馈：喜欢 / 不喜欢 / 跳过，用于后续优化。
-- **未来**：引入 Faiss/Milvus、LightFM、LLM 聊天分析、DPO/RLHF 自迭代。
+- **未来**：引入 Faiss/Milvus、LightGCN、LLM 聊天分析、DPO/RLHF 自迭代。
 
 ### 2.5 问卷系统
 
@@ -291,8 +294,12 @@ unimatch/
 
 - 将用户的资料字段与问卷答案拼接成文本。
 - 使用基于哈希的确定性向量作为 MVP 方案（生产环境应替换为 `BGE-M3` 或 `multilingual-e5-large`）。
+- 当 `EMBEDDING_MODEL` 设置且安装了 `sentence-transformers` 时，使用语义模型生成 embedding；维度不匹配时会裁剪/填充到 `VECTOR_DIMENSION` 以保持与 `pgvector` 列兼容。
 - 存入 `pgvector` 后，使用余弦距离检索候选。
-- 按板块规则打分，返回 Top-N 并附带匹配理由。
+- 按板块规则打分，并叠加可选的 Two-Tower 模型分（参考 Deep Neural Networks for YouTube Recommendations 的 Two-Tower 结构；向量召回侧可参考 LightGCN 的图卷积思想）。
+- 综合用户历史反馈（`MatchFeedback`）进行时间衰减加权：喜欢加分、不喜欢降分、跳过小幅降分。
+- 使用 MMR（Maximal Marginal Relevance）对候选集合重排，在相关性与多样性之间通过 `MMR_LAMBDA` 调节。
+- 返回 Top-N 并附带匹配理由。
 
 ### 5.4 AI 网关
 

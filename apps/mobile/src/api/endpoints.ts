@@ -30,6 +30,7 @@ export const API = {
       password: string;
       nickname: string;
       school: string;
+      referral_code?: string;
     }): Promise<AuthResponse> =>
       apiClient
         .post('/auth/register', { ...payload, phone: null })
@@ -44,6 +45,11 @@ export const API = {
         .then(unwrap),
 
     logout: (): Promise<any> => apiClient.post('/auth/logout').then(unwrap),
+  },
+
+  legal: {
+    get: (doc: 'terms' | 'privacy'): Promise<{ title: string; content: string; updated_at: string }> =>
+      apiClient.get(`/legal/${doc}`).then(unwrap),
   },
 
   me: {
@@ -148,5 +154,11 @@ export const API = {
 
     readMessage: (messageId: string): Promise<any> =>
       apiClient.post(`/messages/${messageId}/read`).then(unwrap),
+  },
+
+  referrals: {
+    getMyCode: (): Promise<{ code: string; link: string; status: string }> => apiClient.get('/referrals/me').then(unwrap),
+    applyCode: (code: string): Promise<any> => apiClient.post('/referrals/apply', { code }).then(unwrap),
+    getStats: (): Promise<{ total_sent: number; total_used: number; total_rewarded: number }> => apiClient.get('/referrals/stats').then(unwrap),
   },
 };

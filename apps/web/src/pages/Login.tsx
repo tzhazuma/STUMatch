@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
@@ -15,10 +15,12 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [nickname, setNickname] = useState('');
   const [school, setSchool] = useState('上海科技大学');
+  const [referralCode, setReferralCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [codeSent, setCodeSent] = useState(false);
   const [countdown, setCountdown] = useState(0);
+  const [agreed, setAgreed] = useState(false);
 
   const handleSendCode = async () => {
     if (!email || countdown > 0) return;
@@ -43,12 +45,16 @@ export default function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    if (mode === 'register' && !agreed) {
+      setError('请先阅读并同意服务协议和隐私政策');
+      return;
+    }
     setLoading(true);
     try {
       if (mode === 'login') {
         await login(email, password);
       } else {
-        await register({ email, code, password, nickname, school });
+        await register({ email, code, password, nickname, school, referral_code: referralCode || undefined });
       }
       navigate('/discovery/academic');
     } catch (e: any) {
@@ -109,6 +115,26 @@ export default function Login() {
               </div>
               <Input label="昵称" value={nickname} onChange={(e) => setNickname(e.target.value)} required />
               <Input label="学校" value={school} onChange={(e) => setSchool(e.target.value)} required />
+              <Input
+                label="邀请码（选填）"
+                placeholder="如有好友邀请码可填写"
+                value={referralCode}
+                onChange={(e) => setReferralCode(e.target.value)}
+              />
+              <label className="flex items-start gap-2 text-sm text-gray-600">
+                <input
+                  type="checkbox"
+                  checked={agreed}
+                  onChange={(e) => setAgreed(e.target.checked)}
+                  className="mt-1"
+                />
+                <span>
+                  我已阅读并同意
+                  <Link to="/legal/terms" className="text-brand-600 hover:underline">服务协议</Link>
+                  和
+                  <Link to="/legal/privacy" className="text-brand-600 hover:underline">隐私政策</Link>
+                </span>
+              </label>
             </>
           )}
           <Input
@@ -126,7 +152,10 @@ export default function Login() {
         </form>
 
         <p className="mt-4 text-center text-xs text-gray-400">
-          注册即表示同意服务协议与隐私政策
+          注册即表示同意
+          <Link to="/legal/terms" className="text-brand-600 hover:underline">服务协议</Link>
+          与
+          <Link to="/legal/privacy" className="text-brand-600 hover:underline">隐私政策</Link>
         </p>
       </Card>
     </div>

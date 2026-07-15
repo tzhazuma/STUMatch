@@ -19,6 +19,7 @@ export type RootStackParamList = {
   UserDetail: { section: Section; userId: string };
   Chat: { conversationId: string; participant: User };
   Questionnaire: undefined;
+  Legal: { doc: 'terms' | 'privacy' };
 };
 
 export type AuthScreenProps<T extends keyof AuthStackParamList> =
