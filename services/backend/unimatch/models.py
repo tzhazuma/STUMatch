@@ -392,6 +392,59 @@ class ModerationLog(Base):
     source: Mapped[str] = mapped_column(String(32), nullable=False)  # chat, board, report, etc.
     triggered: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     words: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    ai_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class ModerationConfig(Base):
+    __tablename__ = "moderation_configs"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    word: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    category: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="other"
+    )  # porn, gamble, drug, fraud, insult, politics
+    severity: Mapped[str] = mapped_column(
+        String(16), default="medium", nullable=False
+    )  # low, medium, high
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
+class Referral(Base):
+    __tablename__ = "referrals"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    inviter_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    code: Mapped[str] = mapped_column(String(32), unique=True, nullable=False, index=True)
+    invitee_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    status: Mapped[str] = mapped_column(
+        String(16), default="pending", nullable=False
+    )  # pending, used, rewarded
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
     )

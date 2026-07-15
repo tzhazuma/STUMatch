@@ -352,6 +352,49 @@ class AIMatchExplanationOut(BaseModel):
     highlights: list[str]
 
 
+class ReferralCodeOut(BaseModel):
+    code: str
+    link: str
+    status: str
+    invitee_id: uuid.UUID | None = None
+    created_at: datetime
+
+
+class ReferralStatsOut(BaseModel):
+    total_sent: int
+    total_used: int
+    total_rewarded: int
+
+
+class ReferralApplyIn(BaseModel):
+    code: str = Field(..., min_length=1, max_length=32)
+
+
+class LegalDocOut(BaseModel):
+    title: str
+    content: str
+    updated_at: datetime
+
+
+class ModerationConfigIn(BaseModel):
+    word: str = Field(..., min_length=1, max_length=128)
+    category: Literal["porn", "gamble", "drug", "fraud", "insult", "politics", "other"] = "other"
+    severity: Literal["low", "medium", "high"] = "medium"
+    enabled: bool = True
+
+
+class ModerationConfigOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    word: str
+    category: str
+    severity: str
+    enabled: bool
+    created_at: datetime
+    updated_at: datetime
+
+
 class AdminUserStatusIn(BaseModel):
     status: Literal["active", "inactive", "suspended"]
 
