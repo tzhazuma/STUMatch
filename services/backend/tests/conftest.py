@@ -25,6 +25,7 @@ from unimatch.config import get_settings  # noqa: E402
 from unimatch.database import Base, get_db  # noqa: E402
 from unimatch.main import app, seed_questionnaires  # noqa: E402
 from unimatch.services.redis_client import get_redis  # noqa: E402
+import unimatch.models  # noqa: E402,F401 ensure all model tables are registered for resets
 
 settings = get_settings()
 

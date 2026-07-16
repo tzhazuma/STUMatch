@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
 """Export anonymized training data for UniMatch AI fine-tuning.
 
-Connects to PostgreSQL via ``DATABASE_URL`` and reads ``match_feedbacks``,
-``questionnaire_responses`` and (if present) ``ai_match_explanations``.
-Outputs two JSONL files under ``OUTPUT_DIR``:
+Connects to PostgreSQL via ``DATABASE_URL`` and reads ``match_feedbacks`` and
+``questionnaire_responses``. Outputs two JSONL files under ``OUTPUT_DIR``:
 
 - ``sft.jsonl`` -- supervised fine-tuning examples in Qwen chat format.
 - ``dpo.jsonl`` -- pairwise preference examples (like vs dislike/skip).
 
 All user identifiers are replaced with run-local pseudonyms and no email,
 phone or nickname is exported.
+
+Positive-feedback explanations are generated on-the-fly using the same prompt
+that ``unimatch.services.ai_gateway.AIGateway.match_explanation`` uses when an
+LLM API key is configured; otherwise a lightweight deterministic template is
+used so the pipeline stays usable in environments without backend dependencies.
 """
 from __future__ import annotations
 
@@ -36,6 +40,26 @@ SYSTEM_PROMPT = (
     "你会根据用户的画像与问卷答案，解释两位用户为什么匹配，并给出简短理由。"
 )
 
+# Optional integration with the backend AI gateway. If the backend environment is
+# not available (e.g. a dedicated AI training env without openai/pydantic-settings),
+# we fall back to a deterministic template.
+_AIGateway: Any | None = None
+_get_settings: Any | None = None
+_HAS_BACKEND = False
+
+try:
+    _BACKEND_ROOT = str(Path(__file__).resolve().parents[1] / "backend")
+    if _BACKEND_ROOT not in sys.path:
+        sys.path.insert(0, _BACKEND_ROOT)
+    from unimatch.services.ai_gateway import AIGateway as _AIGateway  # type: ignore
+    from unimatch.config import get_settings as _get_settings  # type: ignore
+
+    _HAS_BACKEND = True
+except Exception as exc:  # pragma: no cover - optional dependency path
+    logger.debug("Backend AI gateway not available in this environment: %s", exc)
+    _AIGateway = None
+    _get_settings = None
+    _HAS_BACKEND = False
 
 _anon_map: dict[str, str] = {}
 _anon_counter = 0
@@ -46,15 +70,10 @@ def _anonymize(uuid_str: str) -> str:
     global _anon_counter
     if uuid_str in _anon_map:
         return _anon_map[uuid_str]
-    name = f"u{_dlen(_anon_counter)}_{_anon_counter}"
+    name = f"u{_anon_counter}"
     _anon_counter += 1
     _anon_map[uuid_str] = name
     return name
-
-
-def _dlen(idx: int) -> str:
-    """Tiny helper to keep names short; not load-bearing."""
-    return ""
 
 
 def _profile_from_row(row: dict[str, Any], prefix: str) -> dict[str, Any]:
@@ -71,6 +90,27 @@ def _profile_from_row(row: dict[str, Any], prefix: str) -> dict[str, Any]:
         "dating_purpose": row.get(f"{prefix}dating_purpose"),
         "ideal_person": row.get(f"{prefix}ideal_person"),
     }
+
+
+def _profile_text(profile: dict[str, Any]) -> str:
+    """Format a profile dict into the same text style used by the AI gateway."""
+    parts: list[str] = []
+    if profile.get("school"):
+        parts.append(f"学校：{profile['school']}")
+    if profile.get("major"):
+        parts.append(f"专业：{profile['major']}")
+    if profile.get("education_level"):
+        parts.append(f"学历：{profile['education_level']}")
+    if profile.get("mbti"):
+        parts.append(f"MBTI：{profile['mbti']}")
+    interests = profile.get("interests") or []
+    if interests:
+        parts.append(f"兴趣：{','.join(str(v) for v in interests)}")
+    if profile.get("location"):
+        parts.append(f"所在地：{profile['location']}")
+    if profile.get("bio"):
+        parts.append(f"简介：{profile['bio']}")
+    return "；".join(parts) if parts else "暂无资料"
 
 
 def _summarize_profile(profile: dict[str, Any]) -> str:
@@ -107,29 +147,81 @@ def _summarize_answers(answers: dict[str, Any]) -> str:
     return "; ".join(parts)
 
 
-def _build_positive_explanation(
-    row: dict[str, Any], explanation: dict[str, Any] | None
-) -> str:
-    if explanation:
-        text = explanation.get("explanation", "").strip()
-        highlights = explanation.get("highlights") or []
-        if text:
-            if highlights:
-                return f"{text} 共同点：{'、'.join(str(h) for h in highlights[:3])}。"
-            return text
-    me = _summarize_profile(_profile_from_row(row, "p_"))
-    other = _summarize_profile(_profile_from_row(row, "t_"))
-    return (
-        f"基于双方在「{row['section']}」板块的画像，"
-        f"你们存在潜在匹配点。你的画像：{me}；对方画像：{other}。"
-    )
+def _find_common_highlights(row: dict[str, Any]) -> list[str]:
+    """Extract a few shared attributes between the two profiles."""
+    me = _profile_from_row(row, "p_")
+    other = _profile_from_row(row, "t_")
+    highlights: list[str] = []
+
+    shared_interests = set(me.get("interests") or []) & set(other.get("interests") or [])
+    if shared_interests:
+        highlights.extend(sorted(shared_interests))
+    if me.get("major") and me["major"] == other.get("major"):
+        highlights.append(f"专业：{me['major']}")
+    if me.get("school") and me["school"] == other.get("school"):
+        highlights.append(f"学校：{me['school']}")
+    if me.get("mbti") and me["mbti"] == other.get("mbti"):
+        highlights.append(f"MBTI：{me['mbti']}")
+    if me.get("location") and me["location"] == other.get("location"):
+        highlights.append(f"所在地：{me['location']}")
+    if me.get("education_level") and me["education_level"] == other.get("education_level"):
+        highlights.append(f"学历：{me['education_level']}")
+    return highlights[:3]
 
 
-def _build_negative_explanation(row: dict[str, Any]) -> str:
-    return (
-        f"在「{row['section']}」板块，当前用户与对方画像匹配度较低，"
-        f"不建议优先推荐（反馈动作：{row['action']}）。"
-    )
+def _deterministic_explanation(row: dict[str, Any]) -> dict[str, Any]:
+    """Generate a lightweight explanation without calling an LLM."""
+    section = str(row["section"])
+    highlights = _find_common_highlights(row)
+    if highlights:
+        explanation = (
+            f"在「{section}」板块，你们有不少共同点："
+            f"{'、'.join(highlights)}，匹配度不错。"
+        )
+    else:
+        explanation = (
+            f"在「{section}」板块，你们的画像有潜在匹配点，可以进一步聊聊看。"
+        )
+        highlights = ["潜在匹配点"]
+    return {"explanation": explanation, "highlights": highlights}
+
+
+def _ai_gateway_configured() -> bool:
+    """Return True if the backend AI gateway has a non-empty API key configured."""
+    if not (_HAS_BACKEND and _get_settings):
+        return False
+    try:
+        settings = _get_settings()
+        provider = settings.effective_ai_provider
+        cfg = {
+            "deepseek": settings.DEEPSEEK_API_KEY,
+            "kimi": settings.KIMI_API_KEY,
+            "lmstudio": "not-needed",
+            "opencode": settings.OPENCODE_API_KEY,
+            "mimo": settings.MIMO_API_KEY,
+        }.get(provider, getattr(settings, "AI_API_KEY", None))
+        return bool(cfg)
+    except Exception as exc:
+        logger.debug("Could not read AI gateway settings: %s", exc)
+        return False
+
+
+async def _generate_explanation(
+    row: dict[str, Any], gateway: Any | None = None
+) -> dict[str, Any]:
+    """Generate a match explanation, preferring the LLM when configured."""
+    if gateway is not None:
+        try:
+            me_text = _profile_text(_profile_from_row(row, "p_"))
+            target_text = _profile_text(_profile_from_row(row, "t_"))
+            explanation = await gateway.match_explanation(
+                me_text, target_text, str(row["section"])
+            )
+            if explanation.get("explanation"):
+                return explanation
+        except Exception as exc:
+            logger.warning("LLM explanation generation failed: %s", exc)
+    return _deterministic_explanation(row)
 
 
 def _build_prompt(
@@ -148,6 +240,17 @@ def _build_prompt(
     )
 
 
+def _format_explanation(explanation: dict[str, Any]) -> str:
+    """Convert an explanation dict into the assistant text used for SFT."""
+    text = (explanation.get("explanation") or "").strip()
+    highlights = explanation.get("highlights") or []
+    if not text:
+        text = "你们有一些共同兴趣，可以聊聊看。"
+    if highlights:
+        return f"{text} 共同点：{'、'.join(str(h) for h in highlights[:3])}。"
+    return text
+
+
 def _write_jsonl(path: Path, records: list[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as f:
@@ -157,19 +260,12 @@ def _write_jsonl(path: Path, records: list[dict[str, Any]]) -> None:
 
 
 async def _fetch_async(db_url: str) -> dict[str, list[dict[str, Any]]]:
+    from sqlalchemy import text
     from sqlalchemy.ext.asyncio import create_async_engine
 
     engine = create_async_engine(db_url, future=True)
     async with engine.connect() as conn:
-        table_exists: dict[str, bool] = {}
-        for table in ("match_feedbacks", "questionnaire_responses", "ai_match_explanations"):
-            res = await conn.execute(
-                "SELECT 1 FROM information_schema.tables WHERE table_name=:t",
-                {"t": table},
-            )
-            table_exists[table] = res.scalar() is not None
-
-        feedback_sql = """
+        feedback_sql = text("""
             SELECT
                 f.user_id AS user_id,
                 f.target_user_id AS target_user_id,
@@ -178,7 +274,6 @@ async def _fetch_async(db_url: str) -> dict[str, list[dict[str, Any]]]:
                 f.created_at AS created_at,
                 p.major AS p_major,
                 p.education_level AS p_education_level,
-                p.school AS p_school,
                 p.mbti AS p_mbti,
                 p.interests AS p_interests,
                 p.location AS p_location,
@@ -188,7 +283,6 @@ async def _fetch_async(db_url: str) -> dict[str, list[dict[str, Any]]]:
                 p.ideal_person AS p_ideal_person,
                 tp.major AS t_major,
                 tp.education_level AS t_education_level,
-                tp.school AS t_school,
                 tp.mbti AS t_mbti,
                 tp.interests AS t_interests,
                 tp.location AS t_location,
@@ -200,11 +294,11 @@ async def _fetch_async(db_url: str) -> dict[str, list[dict[str, Any]]]:
             LEFT JOIN profiles p ON p.user_id = f.user_id
             LEFT JOIN profiles tp ON tp.user_id = f.target_user_id
             ORDER BY f.created_at DESC
-        """
+        """)
         result = await conn.execute(feedback_sql)
         feedbacks = [dict(row) for row in result.mappings()]
 
-        response_sql = """
+        response_sql = text("""
             SELECT
                 r.user_id AS user_id,
                 r.answers AS answers,
@@ -214,26 +308,14 @@ async def _fetch_async(db_url: str) -> dict[str, list[dict[str, Any]]]:
             FROM questionnaire_responses r
             JOIN questionnaires q ON q.id = r.questionnaire_id
             ORDER BY r.created_at DESC
-        """
+        """)
         result = await conn.execute(response_sql)
         responses = [dict(row) for row in result.mappings()]
-
-        explanations: list[dict[str, Any]] = []
-        if table_exists.get("ai_match_explanations"):
-            result = await conn.execute(
-                """
-                SELECT user_id, target_user_id, section, explanation, highlights, created_at
-                FROM ai_match_explanations
-                ORDER BY created_at DESC
-                """
-            )
-            explanations = [dict(row) for row in result.mappings()]
 
     await engine.dispose()
     return {
         "feedbacks": feedbacks,
         "responses": responses,
-        "explanations": explanations,
     }
 
 
@@ -258,13 +340,6 @@ def _fetch_sync(db_url: str) -> dict[str, list[dict[str, Any]]]:
             ) from exc2
 
     try:
-        table_exists: dict[str, bool] = {}
-        for table in ("match_feedbacks", "questionnaire_responses", "ai_match_explanations"):
-            cur.execute(
-                "SELECT 1 FROM information_schema.tables WHERE table_name=%s", (table,)
-            )
-            table_exists[table] = cur.fetchone() is not None
-
         cur.execute(
             """
             SELECT
@@ -275,7 +350,6 @@ def _fetch_sync(db_url: str) -> dict[str, list[dict[str, Any]]]:
                 f.created_at AS created_at,
                 p.major AS p_major,
                 p.education_level AS p_education_level,
-                p.school AS p_school,
                 p.mbti AS p_mbti,
                 p.interests AS p_interests,
                 p.location AS p_location,
@@ -285,7 +359,6 @@ def _fetch_sync(db_url: str) -> dict[str, list[dict[str, Any]]]:
                 p.ideal_person AS p_ideal_person,
                 tp.major AS t_major,
                 tp.education_level AS t_education_level,
-                tp.school AS t_school,
                 tp.mbti AS t_mbti,
                 tp.interests AS t_interests,
                 tp.location AS t_location,
@@ -316,21 +389,9 @@ def _fetch_sync(db_url: str) -> dict[str, list[dict[str, Any]]]:
         )
         responses = [dict(row) for row in cur.fetchall()]
 
-        explanations: list[dict[str, Any]] = []
-        if table_exists.get("ai_match_explanations"):
-            cur.execute(
-                """
-                SELECT user_id, target_user_id, section, explanation, highlights, created_at
-                FROM ai_match_explanations
-                ORDER BY created_at DESC
-                """
-            )
-            explanations = [dict(row) for row in cur.fetchall()]
-
         return {
             "feedbacks": feedbacks,
             "responses": responses,
-            "explanations": explanations,
         }
     finally:
         cur.close()
@@ -349,16 +410,16 @@ async def fetch_data() -> dict[str, list[dict[str, Any]]]:
     return _fetch_sync(DATABASE_URL)
 
 
-def build_datasets(
-    data: dict[str, list[dict[str, Any]]]
+async def build_datasets(
+    data: dict[str, list[dict[str, Any]]],
+    gateway: Any | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Build SFT and DPO datasets from raw rows."""
     feedbacks = data["feedbacks"]
     responses = data["responses"]
-    explanations = data["explanations"]
 
-    if not feedbacks and not responses:
-        logger.warning("No feedback or response rows found; output files will be empty.")
+    if not feedbacks:
+        logger.warning("No feedback rows found; output files will be empty.")
         return [], []
 
     # Aggregate questionnaire answers per user.
@@ -366,12 +427,6 @@ def build_datasets(
     for resp in responses:
         uid = str(resp["user_id"])
         user_answers.setdefault(uid, {}).update(resp.get("answers") or {})
-
-    # Index explanations by (user, target, section).
-    explanation_map: dict[tuple[str, str, str], dict[str, Any]] = {}
-    for exp in explanations:
-        key = (str(exp["user_id"]), str(exp["target_user_id"]), str(exp["section"]))
-        explanation_map[key] = exp
 
     sft_records: list[dict[str, Any]] = []
     for row in feedbacks:
@@ -383,8 +438,8 @@ def build_datasets(
         user_pseudo = _anonymize(uid)
         # target pseudo is generated even though not spoken to avoid identity leak
         _anonymize(tid)
-        exp = explanation_map.get((uid, tid, section))
-        assistant = _build_positive_explanation(row, exp)
+        explanation = await _generate_explanation(row, gateway)
+        assistant = _format_explanation(explanation)
         prompt = _build_prompt(
             user_pseudo,
             _profile_from_row(row, "p_"),
@@ -424,14 +479,15 @@ def build_datasets(
             section,
             user_answers.get(uid, {}),
         )
-        chosen_exp = explanation_map.get(
-            (str(chosen["user_id"]), str(chosen["target_user_id"]), section)
-        )
+        chosen_exp = await _generate_explanation(chosen, gateway)
         dpo_records.append(
             {
                 "prompt": prompt,
-                "chosen": _build_positive_explanation(chosen, chosen_exp),
-                "rejected": _build_negative_explanation(rejected),
+                "chosen": _format_explanation(chosen_exp),
+                "rejected": (
+                    f"在「{section}」板块，当前用户与对方画像匹配度较低，"
+                    f"不建议优先推荐（反馈动作：{rejected['action']}）。"
+                ),
             }
         )
 
@@ -442,13 +498,19 @@ async def main() -> int:
     logger.info("Connecting to database...")
     data = await fetch_data()
     logger.info(
-        "Loaded %d feedbacks, %d responses, %d explanations",
+        "Loaded %d feedbacks and %d responses",
         len(data["feedbacks"]),
         len(data["responses"]),
-        len(data["explanations"]),
     )
 
-    sft, dpo = build_datasets(data)
+    gateway = None
+    if _ai_gateway_configured() and _AIGateway is not None:
+        logger.info("LLM API key configured; using AI gateway for explanations.")
+        gateway = _AIGateway()
+    else:
+        logger.info("No LLM API key configured; using deterministic explanation template.")
+
+    sft, dpo = await build_datasets(data, gateway=gateway)
     _write_jsonl(SFT_PATH, sft)
     _write_jsonl(DPO_PATH, dpo)
 

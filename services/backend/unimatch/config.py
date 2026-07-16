@@ -71,9 +71,9 @@ class Settings(BaseSettings):
     LMSTUDIO_API_KEY: Optional[str] = "not-needed"
     LMSTUDIO_BASE_URL: str = "http://localhost:1234/v1"
     LMSTUDIO_MODEL: str = "local-model"
-    OPCODE_API_KEY: Optional[str] = None
-    OPCODE_BASE_URL: str = "https://api.opencode.example.com/v1"
-    OPCODE_MODEL: str = "opencode-7b"
+    OPENCODE_API_KEY: Optional[str] = None
+    OPENCODE_BASE_URL: str = "https://api.opencode.example.com/v1"
+    OPENCODE_MODEL: str = "opencode-7b"
     MIMO_API_KEY: Optional[str] = None
     MIMO_BASE_URL: str = "https://api.mimo.example.com/v1"
     MIMO_MODEL: str = "mimo-7b"

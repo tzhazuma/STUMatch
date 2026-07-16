@@ -1,4 +1,6 @@
 """Tests for the questionnaire endpoints."""
+from datetime import date
+
 from tests.conftest import register_user, login_user
 
 
@@ -33,6 +35,8 @@ async def test_submit_questionnaire_response(client):
         "mbti": "INTP",
         "location": "Beijing",
         "bio": "Math enthusiast",
+        "notification_consent": "yes_all",
+        "school_verification_preference": "edu_email",
     }
     resp = await client.post(
         "/questionnaires/basic/responses",
@@ -50,14 +54,28 @@ async def test_submit_questionnaire_response_updates_existing(client):
     await register_user(client, "test-response-update@example.com", "password123", "Kate")
     tokens = await login_user(client, "test-response-update@example.com", "password123")
 
-    first = {"major": "Physics"}
+    first = {
+        "gender": "male",
+        "education_level": "undergraduate",
+        "major": "Physics",
+        "interests": ["physics"],
+        "notification_consent": "yes_all",
+        "school_verification_preference": "edu_email",
+    }
     await client.post(
         "/questionnaires/basic/responses",
         headers={"Authorization": f"Bearer {tokens['access_token']}"},
         json={"answers": first},
     )
 
-    second = {"major": "Chemistry"}
+    second = {
+        "gender": "male",
+        "education_level": "master",
+        "major": "Chemistry",
+        "interests": ["chemistry"],
+        "notification_consent": "yes_all",
+        "school_verification_preference": "edu_email",
+    }
     resp = await client.post(
         "/questionnaires/basic/responses",
         headers={"Authorization": f"Bearer {tokens['access_token']}"},
@@ -169,3 +187,60 @@ async def test_dating_questionnaire_has_boundary_and_values(client):
     assert "values_ranking" in questions
     assert questions["boundary_respect"]["type"] == "single_choice"
     assert questions["values_ranking"]["type"] == "text"
+
+
+async def test_submit_response_invalid_option_returns_422(client):
+    """Submitting an answer outside the question options returns 422."""
+    await register_user(client, "test-invalid-option@example.com", "password123", "Sam")
+    tokens = await login_user(client, "test-invalid-option@example.com", "password123")
+
+    resp = await client.post(
+        "/questionnaires/basic/responses",
+        headers={"Authorization": f"Bearer {tokens['access_token']}"},
+        json={"answers": {"gender": "not_a_gender"}},
+    )
+    assert resp.status_code == 422
+    assert "invalid option for gender" in resp.json()["detail"]
+
+
+async def test_submit_response_syncs_profile_fields(client):
+    """Submitting a basic questionnaire updates the corresponding Profile fields."""
+    await register_user(client, "test-profile-sync@example.com", "password123", "Tina")
+    tokens = await login_user(client, "test-profile-sync@example.com", "password123")
+
+    answers = {
+        "gender": "female",
+        "birth_date": "1999-03-20",
+        "education_level": "master",
+        "major": "Computer Science",
+        "interests": ["AI", "hiking"],
+        "mbti": "ENFP",
+        "location": "Shanghai",
+        "bio": "CS master student.",
+        "notification_consent": "yes_important",
+        "school_verification_preference": "student_card",
+    }
+    resp = await client.post(
+        "/questionnaires/basic/responses",
+        headers={"Authorization": f"Bearer {tokens['access_token']}"},
+        json={"answers": answers},
+    )
+    assert resp.status_code == 200
+
+    profile_resp = await client.get(
+        "/profiles/me",
+        headers={"Authorization": f"Bearer {tokens['access_token']}"},
+    )
+    assert profile_resp.status_code == 200
+    profile = profile_resp.json()["data"]
+    today = date.today()
+    expected_age = today.year - 1999 - ((today.month, today.day) < (3, 20))
+    assert profile["gender"] == "female"
+    assert profile["birth_date"] == "1999-03-20"
+    assert profile["age"] == expected_age
+    assert profile["education_level"] == "master"
+    assert profile["major"] == "Computer Science"
+    assert profile["interests"] == ["AI", "hiking"]
+    assert profile["mbti"] == "ENFP"
+    assert profile["location"] == "Shanghai"
+    assert profile["bio"] == "CS master student."

@@ -17,9 +17,27 @@ from unimatch.schemas import (
     ProfileUpdate,
 )
 from unimatch.security import get_current_user
+from unimatch.services.moderation import ModerationService, load_moderation_configs
 from unimatch.services.storage import StorageService
 
 router = APIRouter(prefix="/profiles", tags=["profiles"])
+
+PROFILE_MODERATED_FIELDS = [
+    "nickname",
+    "bio",
+    "ideal_person",
+    "dating_purpose",
+    "research_direction",
+]
+
+
+def _has_high_severity(service: ModerationService, words: list[str]) -> bool:
+    """Return True if any matched word is high severity."""
+    for word in words:
+        meta = service._meta.get(word)
+        if meta and meta.get("severity") == "high":
+            return True
+    return False
 
 
 async def _get_or_create_profile(db: AsyncSession, user: User) -> Profile:
@@ -53,6 +71,20 @@ async def update_profile(
 ) -> dict[str, Any]:
     profile = await _get_or_create_profile(db, current_user)
     update_data = payload.model_dump(exclude_unset=True)
+
+    configs = await load_moderation_configs(db)
+    moderation = ModerationService(extra_words=configs)
+    for field in PROFILE_MODERATED_FIELDS:
+        value = update_data.get(field)
+        if not value:
+            continue
+        result = await moderation.async_moderate(value, source="profile", db=db)
+        if result["triggered"] and _has_high_severity(moderation, result["words"]):
+            raise HTTPException(
+                status_code=400,
+                detail=f"包含违禁词: {', '.join(result['words'])}",
+            )
+
     for field, value in update_data.items():
         setattr(profile, field, value)
     if profile.birth_date and not profile.age:

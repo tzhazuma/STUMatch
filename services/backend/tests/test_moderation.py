@@ -201,3 +201,62 @@ async def test_message_board_moderation_blocks_and_logs(client, db_session):
         l.text == "这是一条色情消息" and l.source == "board" and l.triggered
         for l in logs
     )
+
+
+async def test_ws_chat_moderation_blocks_banned_word(db_session):
+    """WebSocket chat path uses DB configs and async_moderate to block words."""
+    db_session.add(
+        ModerationConfig(
+            word="ws_bad_word", category="insult", severity="high", enabled=True
+        )
+    )
+    await db_session.commit()
+
+    configs = await load_moderation_configs(db_session)
+    moderation = ModerationService(extra_words=configs)
+    result = await moderation.async_moderate(
+        "hello ws_bad_word", source="chat", db=db_session
+    )
+    assert result["triggered"] is True
+    assert "ws_bad_word" in result["words"]
+
+    logs = (await db_session.execute(select(ModerationLog))).scalars().all()
+    assert any(
+        l.text == "hello ws_bad_word" and l.source == "chat" and l.triggered
+        for l in logs
+    )
+
+
+async def test_profile_update_rejects_high_severity_word(client, db_session):
+    await register_user(client, "profile-bad@example.com", "password123", "GoodNick")
+    tokens = await login_user(client, "profile-bad@example.com", "password123")
+    headers = {"Authorization": f"Bearer {tokens['access_token']}"}
+
+    resp = await client.put(
+        "/profiles/me",
+        headers=headers,
+        json={"nickname": "色情昵称", "bio": "正常简介"},
+    )
+    assert resp.status_code == 400
+    assert "色情" in resp.json()["detail"]
+
+    logs = (await db_session.execute(select(ModerationLog))).scalars().all()
+    assert any(
+        l.text == "色情昵称" and l.source == "profile" and l.triggered for l in logs
+    )
+
+
+async def test_profile_update_accepts_clean_text(client, db_session):
+    await register_user(client, "profile-clean@example.com", "password123", "CleanNick")
+    tokens = await login_user(client, "profile-clean@example.com", "password123")
+    headers = {"Authorization": f"Bearer {tokens['access_token']}"}
+
+    resp = await client.put(
+        "/profiles/me",
+        headers=headers,
+        json={"nickname": "CleanNick2", "bio": "喜欢读书和旅行"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert data["nickname"] == "CleanNick2"
+    assert data["bio"] == "喜欢读书和旅行"

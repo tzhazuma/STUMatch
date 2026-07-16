@@ -8,7 +8,7 @@ from unimatch.database import get_db
 from unimatch.schemas import MessageIn
 from unimatch.security import decode_token
 from unimatch.services.chat_manager import ConnectionManager, send_message
-from unimatch.services.moderation import ModerationService
+from unimatch.services.moderation import ModerationService, load_moderation_configs
 
 router = APIRouter(tags=["websocket"])
 manager = ConnectionManager()
@@ -39,6 +39,17 @@ async def websocket_chat(
                 conversation_id = data.get("conversation_id")
                 content = data.get("content", "")
                 message_type = data.get("message_type", "text")
+
+                configs = await load_moderation_configs(db)
+                moderation = ModerationService(extra_words=configs)
+                check = await moderation.async_moderate(content, source="chat", db=db)
+                if check["triggered"]:
+                    await manager.send_to(
+                        user_id,
+                        {"type": "error", "message": "包含违禁词"},
+                    )
+                    continue
+
                 try:
                     msg = await send_message(
                         db,
@@ -46,7 +57,7 @@ async def websocket_chat(
                         user_id,
                         conversation_id,
                         MessageIn(content=content, message_type=message_type),
-                        ModerationService(),
+                        moderation,
                     )
                     await db.commit()
                 except ValueError as exc:
