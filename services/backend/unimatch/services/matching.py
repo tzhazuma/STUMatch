@@ -9,7 +9,7 @@ from typing import Any
 from uuid import UUID
 
 import numpy as np
-from sqlalchemy import select, text
+from sqlalchemy import label, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from unimatch.config import get_settings
@@ -54,12 +54,14 @@ def _resolve_weights_path(path: str | None) -> Path | None:
     return p
 
 
-def _cosine_similarity(a: list[float] | None, b: list[float] | None) -> float:
+def _cosine_similarity(a: list[float] | np.ndarray | None, b: list[float] | np.ndarray | None) -> float:
     """Cosine similarity between two vectors, safe for missing/empty vectors."""
-    if not a or not b:
+    if a is None or b is None:
         return 0.0
-    va = np.array(a, dtype=np.float32)
-    vb = np.array(b, dtype=np.float32)
+    va = np.asarray(a, dtype=np.float32)
+    vb = np.asarray(b, dtype=np.float32)
+    if va.size == 0 or vb.size == 0:
+        return 0.0
     na = np.linalg.norm(va)
     nb = np.linalg.norm(vb)
     if na == 0 or nb == 0:
@@ -170,10 +172,10 @@ class MatchingService:
             return None
         return profile.profile_vector
 
-    def _build_profile_text(self, my_profile: Profile, user_id: UUID, responses: list[QuestionnaireResponse]) -> str:
+    def _build_profile_text(self, my_profile: Profile, my_user: User, responses: list[QuestionnaireResponse]) -> str:
         """Concatenate profile fields and questionnaire answers into a single text."""
         parts = [
-            my_profile.school,
+            my_user.school,
             my_profile.major,
             my_profile.education_level.value if my_profile.education_level else None,
             my_profile.mbti,
@@ -255,7 +257,7 @@ class MatchingService:
         return (vec / norm).tolist()
 
     def _rule_score(
-        self, section: str, me: Profile, other: Profile
+        self, section: str, me: Profile, me_user: User, other: Profile, other_user: User
     ) -> tuple[float, str]:
         """Score two profiles based on hard/soft rules for a given section."""
         score = 0.0
@@ -267,7 +269,7 @@ class MatchingService:
             if me.education_level and me.education_level == other.education_level:
                 score += 0.2
                 reasons.append("同学历")
-            if me.school and me.school == other.school:
+            if me_user.school and other_user.school and me_user.school == other_user.school:
                 score += 0.2
                 reasons.append("同学校")
         elif section == "daily":
@@ -375,8 +377,15 @@ class MatchingService:
         limit: int = 10,
     ) -> list[DiscoveryUser]:
         """Return top recommendations combining vector, rules, two-tower, feedback and MMR."""
-        result = await self.db.execute(select(Profile).where(Profile.user_id == user_id))
-        my_profile = result.scalar_one_or_none()
+        result = await self.db.execute(
+            select(Profile, User)
+            .join(User, User.id == Profile.user_id)
+            .where(Profile.user_id == user_id)
+        )
+        row = result.first()
+        if not row:
+            return []
+        my_profile, my_user = row
         if not my_profile:
             return []
 
@@ -384,7 +393,7 @@ class MatchingService:
             select(QuestionnaireResponse).where(QuestionnaireResponse.user_id == user_id)
         )
         responses = list(q_res.scalars().all())
-        profile_text = self._build_profile_text(my_profile, user_id, responses)
+        profile_text = self._build_profile_text(my_profile, my_user, responses)
 
         vector = await self._text_to_vector(profile_text)
         my_profile.profile_vector = vector
@@ -393,7 +402,7 @@ class MatchingService:
         # Query candidates excluding self and inactive users, requiring a vector.
         distance = _vector_distance_sql(vector)
         stmt = (
-            select(Profile, User, distance.label("distance"))
+            select(Profile, User, label("distance", distance))
             .join(User, User.id == Profile.user_id)
             .where(
                 User.id != user_id,
@@ -413,7 +422,7 @@ class MatchingService:
             if profile is None or user is None:
                 continue
             base_score = max(0.0, 1.0 - (distance_val or 0.0))
-            rule_score, reason = self._rule_score(section, my_profile, profile)
+            rule_score, reason = self._rule_score(section, my_profile, my_user, profile, user)
 
             tower_score = self.two_tower.score(user_id, profile.user_id)
             if tower_score is not None:

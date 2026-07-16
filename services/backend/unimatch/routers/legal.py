@@ -9,7 +9,7 @@ from unimatch.schemas import ApiResponse, LegalDocOut
 
 router = APIRouter(prefix="/legal", tags=["legal"])
 
-DOCS_DIR = Path(__file__).resolve().parents[3] / "docs"
+DOCS_DIR = Path(__file__).resolve().parents[4] / "docs"
 
 
 def _parse_updated_at(content: str) -> datetime:

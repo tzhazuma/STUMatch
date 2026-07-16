@@ -18,11 +18,13 @@ def _unit_vector(dim: int, index: int) -> list[float]:
 
 async def _make_user_and_profile(db_session, **profile_kwargs) -> tuple[User, Profile]:
     suffix = uuid.uuid4().hex[:8]
+    school = profile_kwargs.pop("school", None)
     user = User(
         email=f"test-{suffix}@example.com",
         hashed_password="fake",
         nickname=f"TestUser{suffix}",
         status=UserStatus.ACTIVE,
+        school=school,
     )
     db_session.add(user)
     await db_session.flush()
