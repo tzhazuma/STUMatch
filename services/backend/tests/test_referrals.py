@@ -140,3 +140,56 @@ async def test_register_with_referral_code(client: AsyncClient):
 
     stats = await client.get("/referrals/stats", headers={"Authorization": f"Bearer {inviter_token}"})
     assert stats.json()["data"]["total_used"] == 1
+
+
+@pytest.mark.asyncio
+async def test_referral_code_can_be_used_by_multiple_invitees(client: AsyncClient):
+    inviter = await register_user(client, "multi-inviter@example.com", "password123", "Multi Inviter")
+    inviter_token = inviter["access_token"]
+
+    code = (
+        await client.get("/referrals/me", headers={"Authorization": f"Bearer {inviter_token}"})
+    ).json()["data"]["code"]
+
+    invitee_a = await register_user(client, "invitee-a@example.com", "password123", "Invitee A")
+    invitee_b = await register_user(client, "invitee-b@example.com", "password123", "Invitee B")
+
+    for invitee_token in (invitee_a["access_token"], invitee_b["access_token"]):
+        resp = await client.post(
+            "/referrals/apply",
+            json={"code": code},
+            headers={"Authorization": f"Bearer {invitee_token}"},
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["data"]["status"] == "used"
+
+    stats = await client.get("/referrals/stats", headers={"Authorization": f"Bearer {inviter_token}"})
+    assert stats.json()["data"]["total_used"] == 2
+
+
+@pytest.mark.asyncio
+async def test_same_invitee_cannot_apply_same_code_twice(client: AsyncClient):
+    inviter = await register_user(client, "repeat-inviter@example.com", "password123", "Repeat Inviter")
+    inviter_token = inviter["access_token"]
+
+    code = (
+        await client.get("/referrals/me", headers={"Authorization": f"Bearer {inviter_token}"})
+    ).json()["data"]["code"]
+
+    invitee = await register_user(client, "repeat-invitee@example.com", "password123", "Repeat Invitee")
+    invitee_token = invitee["access_token"]
+
+    first = await client.post(
+        "/referrals/apply",
+        json={"code": code},
+        headers={"Authorization": f"Bearer {invitee_token}"},
+    )
+    assert first.status_code == 200
+
+    second = await client.post(
+        "/referrals/apply",
+        json={"code": code},
+        headers={"Authorization": f"Bearer {invitee_token}"},
+    )
+    assert second.status_code == 409
+    assert "already used" in second.json()["detail"].lower()

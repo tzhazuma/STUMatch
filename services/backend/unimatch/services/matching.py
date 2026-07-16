@@ -110,7 +110,8 @@ class TwoTowerScorer:
             self.weights = data
             self.user_embeddings = data.get("user_embeddings") or {}
             self.item_embeddings = data.get("item_embeddings") or {}
-            self.mlp = data.get("mlp")
+            # The retraining exporter uses ``mlp_weights``; older files use ``mlp``.
+            self.mlp = data.get("mlp") or data.get("mlp_weights")
             logger.info("Loaded Two-Tower weights from %s", p)
         except Exception as exc:  # pragma: no cover
             logger.warning("Failed to load recommendation weights from %s: %s", p, exc)
@@ -125,7 +126,7 @@ class TwoTowerScorer:
         W2 = np.array(self.mlp["W2"], dtype=np.float32)
         b2 = np.array(self.mlp["b2"], dtype=np.float32)
         h = np.maximum(0.0, W1 @ x + b1)  # ReLU
-        out = float(W2 @ h + b2)
+        out = float((W2 @ h + b2).item())
         # Treat scalar output as logit.
         return self._sigmoid(out)
 
@@ -345,10 +346,19 @@ class MatchingService:
 
         return [items[i][0] for i in selected]
 
-    async def _feedback_adjustments(self, user_id: UUID) -> dict[UUID, float]:
-        """Build a map of target_user_id -> time-decayed score adjustment."""
+    async def _feedback_adjustments(
+        self, user_id: UUID, section: str
+    ) -> dict[UUID, float]:
+        """Build a map of target_user_id -> time-decayed score adjustment.
+
+        Only feedback rows recorded for ``section`` are applied, so a dislike
+        in ``academic`` does not penalise the same user's ``daily`` candidates.
+        """
         result = await self.db.execute(
-            select(MatchFeedback).where(MatchFeedback.user_id == user_id)
+            select(MatchFeedback).where(
+                MatchFeedback.user_id == user_id,
+                MatchFeedback.section == section,
+            )
         )
         feedbacks = result.scalars().all()
         now = datetime.now(timezone.utc)
@@ -414,7 +424,7 @@ class MatchingService:
         )
         rows = await self.db.execute(stmt)
 
-        feedback_adj = await self._feedback_adjustments(user_id)
+        feedback_adj = await self._feedback_adjustments(user_id, section)
 
         candidates = []
         for row in rows.all():

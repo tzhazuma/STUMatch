@@ -352,6 +352,17 @@ class AIMatchExplanationOut(BaseModel):
     highlights: list[str]
 
 
+class ReferralUseOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    referral_id: uuid.UUID
+    invitee_id: uuid.UUID | None
+    status: str
+    created_at: datetime
+    updated_at: datetime
+
+
 class ReferralCodeOut(BaseModel):
     code: str
     link: str

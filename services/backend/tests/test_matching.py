@@ -118,6 +118,103 @@ async def test_feedback_integration(db_session, monkeypatch):
     assert scores[liked_user.id] > scores[disliked_user.id]
 
 
+async def test_feedback_section_isolation(db_session, monkeypatch):
+    """Feedback in one section must not leak into recommendations for another section."""
+    settings = get_settings()
+    monkeypatch.setattr(settings, "MMR_LAMBDA", 1.0)
+
+    me_user, _ = await _make_user_and_profile(
+        db_session,
+        major="Biology",
+        age=22,
+        profile_vector=_unit_vector(settings.VECTOR_DIMENSION, 0),
+    )
+    # Same profile vector -> identical base score, so any difference comes from feedback.
+    academic_disliked_user, _ = await _make_user_and_profile(
+        db_session,
+        major="Biology",
+        age=22,
+        profile_vector=_unit_vector(settings.VECTOR_DIMENSION, 1),
+    )
+    neutral_user, _ = await _make_user_and_profile(
+        db_session,
+        major="Biology",
+        age=22,
+        profile_vector=_unit_vector(settings.VECTOR_DIMENSION, 1),
+    )
+    daily_liked_user, _ = await _make_user_and_profile(
+        db_session,
+        major="Biology",
+        age=22,
+        profile_vector=_unit_vector(settings.VECTOR_DIMENSION, 2),
+    )
+
+    db_session.add_all(
+        [
+            MatchFeedback(user_id=me_user.id, target_user_id=academic_disliked_user.id, section="academic", action="dislike"),
+            MatchFeedback(user_id=me_user.id, target_user_id=daily_liked_user.id, section="daily", action="like"),
+        ]
+    )
+    await db_session.commit()
+
+    service = MatchingService(db_session)
+    recs = await service.recommend(me_user.id, "daily", limit=10)
+    scores = {r.user_id: r.match_score for r in recs}
+
+    # Academic dislike must not affect daily recommendations.
+    assert scores[academic_disliked_user.id] == pytest.approx(scores[neutral_user.id], abs=1e-6)
+    # Daily like should still produce a boost in the daily section.
+    assert scores[daily_liked_user.id] > scores[neutral_user.id]
+
+
+async def test_two_tower_score_with_mlp_weights(tmp_path):
+    """TwoTowerScorer loads weights exported with the ``mlp_weights`` key."""
+    uid = uuid.uuid4()
+    cid = uuid.uuid4()
+    dim = 4
+    weights = {
+        "user_embeddings": {str(uid): [1.0, 0.0, 0.0, 0.0]},
+        "item_embeddings": {str(cid): [1.0, 0.0, 0.0, 0.0]},
+        "mlp_weights": {
+            "W1": [[0.1] * (dim * 2)] * dim,
+            "b1": [0.0] * dim,
+            "W2": [[0.1] * dim],
+            "b2": [0.0],
+        },
+    }
+    path = tmp_path / "weights.json"
+    path.write_text(json.dumps(weights))
+
+    scorer = TwoTowerScorer(str(path))
+    assert scorer.mlp is not None
+    score = scorer.score(uid, cid)
+    assert score is not None
+    assert 0.0 <= score <= 1.0
+
+
+async def test_two_tower_score_with_legacy_mlp_key(tmp_path):
+    """TwoTowerScorer remains backward compatible with the legacy ``mlp`` key."""
+    uid = uuid.uuid4()
+    cid = uuid.uuid4()
+    dim = 4
+    weights = {
+        "user_embeddings": {str(uid): [1.0, 0.0, 0.0, 0.0]},
+        "item_embeddings": {str(cid): [1.0, 0.0, 0.0, 0.0]},
+        "mlp": {
+            "W1": [[0.1] * (dim * 2)] * dim,
+            "b1": [0.0] * dim,
+            "W2": [[0.1] * dim],
+            "b2": [0.0],
+        },
+    }
+    path = tmp_path / "weights.json"
+    path.write_text(json.dumps(weights))
+
+    scorer = TwoTowerScorer(str(path))
+    assert scorer.mlp is not None
+    assert scorer.score(uid, cid) is not None
+
+
 async def test_mmr_rerank_promotes_diversity():
     """With lambda=0, MMR should pick the candidate most dissimilar to the first pick."""
     dim = 8

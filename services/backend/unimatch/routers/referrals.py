@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from unimatch.config import get_settings
 from unimatch.database import get_db
-from unimatch.models import Referral, User
+from unimatch.models import Referral, ReferralUse, User
 from unimatch.schemas import ApiResponse, ReferralApplyIn, ReferralCodeOut, ReferralStatsOut
 from unimatch.security import get_current_user
 
@@ -61,6 +61,32 @@ def _build_invite_link(request: Request, code: str) -> str:
     return f"{origin.rstrip('/')}/register?referral_code={code}"
 
 
+async def create_referral_use(
+    db: AsyncSession, referral: Referral, invitee_id: uuid.UUID
+) -> ReferralUse:
+    """Create a new ReferralUse row, raising 409 if this invitee already used the code.
+
+    This helper is exported so the registration flow in auth.py can reuse it.
+    """
+    existing = await db.scalar(
+        select(ReferralUse).where(
+            ReferralUse.referral_id == referral.id,
+            ReferralUse.invitee_id == invitee_id,
+        )
+    )
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="you already used this referral code",
+        )
+
+    use = ReferralUse(referral_id=referral.id, invitee_id=invitee_id, status="used")
+    db.add(use)
+    await db.commit()
+    await db.refresh(use)
+    return use
+
+
 @router.get("/me", response_model=ApiResponse)
 async def get_my_referral(
     request: Request,
@@ -68,11 +94,20 @@ async def get_my_referral(
     current_user: User = Depends(get_current_user),
 ) -> dict[str, Any]:
     referral = await _get_or_create_referral(db, current_user)
+
+    # For backward compatibility, surface the first successful use as the
+    # legacy single-invitee fields.
+    first_use = await db.scalar(
+        select(ReferralUse)
+        .where(ReferralUse.referral_id == referral.id)
+        .order_by(ReferralUse.created_at)
+    )
+
     data = ReferralCodeOut(
         code=referral.code,
         link=_build_invite_link(request, referral.code),
-        status=referral.status,
-        invitee_id=referral.invitee_id,
+        status="used" if first_use is not None else referral.status,
+        invitee_id=first_use.invitee_id if first_use is not None else None,
         created_at=referral.created_at,
     ).model_dump()
     return {"data": data}
@@ -91,14 +126,9 @@ async def apply_referral_code(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="invalid referral code")
     if referral.inviter_id == current_user.id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="cannot use your own code")
-    if referral.status != "pending":
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="referral code already used")
 
-    referral.invitee_id = current_user.id
-    referral.status = "used"
-    await db.commit()
-    await db.refresh(referral)
-    return {"data": {"code": referral.code, "status": referral.status}}
+    await create_referral_use(db, referral, current_user.id)
+    return {"data": {"code": referral.code, "status": "used"}}
 
 
 @router.get("/stats", response_model=ApiResponse)
@@ -110,13 +140,16 @@ async def get_referral_stats(
         select(func.count(Referral.id)).where(Referral.inviter_id == current_user.id)
     )
     total_used = await db.scalar(
-        select(func.count(Referral.id)).where(
-            Referral.inviter_id == current_user.id, Referral.status == "used"
-        )
+        select(func.count(ReferralUse.id))
+        .join(Referral)
+        .where(Referral.inviter_id == current_user.id)
     )
     total_rewarded = await db.scalar(
-        select(func.count(Referral.id)).where(
-            Referral.inviter_id == current_user.id, Referral.status == "rewarded"
+        select(func.count(ReferralUse.id))
+        .join(Referral)
+        .where(
+            Referral.inviter_id == current_user.id,
+            ReferralUse.status == "rewarded",
         )
     )
     data = ReferralStatsOut(

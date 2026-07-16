@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from unimatch.config import get_settings
 from unimatch.database import get_db
 from unimatch.models import Profile, Referral, User, UserConsent
+from unimatch.routers.referrals import create_referral_use
 from unimatch.schemas import (
     ApiResponse,
     LoginRequest,
@@ -69,12 +70,10 @@ async def _apply_referral_code(db: AsyncSession, user: User, code: str | None) -
         if referral.inviter_id == user.id:
             logger.warning("User attempted to use their own referral code: %s", user.id)
             return
-        if referral.status != "pending":
-            logger.warning("Referral code already used: %s", code)
-            return
-        referral.invitee_id = user.id
-        referral.status = "used"
-        await db.commit()
+        await create_referral_use(db, referral, user.id)
+    except HTTPException as exc:
+        # Duplicate use or other expected referral error should not fail registration.
+        logger.warning("Referral code use failed during registration: %s - %s", code, exc.detail)
     except Exception:
         logger.exception("Failed to apply referral code: %s", code)
         await db.rollback()
