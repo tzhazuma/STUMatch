@@ -3,7 +3,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from unimatch.database import get_db
@@ -95,7 +95,7 @@ async def get_messages(
     )
     result = await db.execute(stmt)
     messages = result.scalars().all()
-    total = await db.scalar(select(Message).where(Message.conversation_id == conversation_id).count())
+    total = await db.scalar(select(func.count(Message.id)).where(Message.conversation_id == conversation_id))
     return {
         "data": {
             "items": [MessageOut.model_validate(m).model_dump() for m in reversed(messages)],

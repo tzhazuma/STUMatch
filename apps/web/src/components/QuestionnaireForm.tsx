@@ -142,7 +142,7 @@ function QuestionInput({
   onRemoveTag: (v: string) => void;
 }) {
   const [tagInput, setTagInput] = useState('');
-  const tags = ((value as string[] | undefined) || []).filter(Boolean);
+  const tags = Array.isArray(value) ? value.filter(Boolean) : [];
 
   if (question.type === 'single_choice') {
     return (
