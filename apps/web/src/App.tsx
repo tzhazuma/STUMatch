@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from '@/components/Layout';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
+import Landing from '@/pages/Landing';
 import Login from '@/pages/Login';
 import Register from '@/pages/Register';
 import Legal from '@/pages/Legal';
@@ -14,6 +15,7 @@ import Chat from '@/pages/Chat';
 export default function App() {
   return (
     <Routes>
+      <Route path="/" element={<Landing />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/legal/:doc" element={<Legal />} />
@@ -24,7 +26,7 @@ export default function App() {
         <Route path="/questionnaire/:slug" element={<Questionnaire />} />
         <Route path="/friends" element={<Friends />} />
         <Route path="/chat/:conversationId" element={<Chat />} />
-        <Route path="/" element={<Navigate to="/discovery/academic" replace />} />
+        <Route path="/app" element={<Navigate to="/discovery/academic" replace />} />
       </Route>
     </Routes>
   );

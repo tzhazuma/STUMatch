@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Star } from 'lucide-react';
+import { Star, CheckCircle2, HelpCircle } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Textarea } from './ui/Textarea';
@@ -30,6 +30,8 @@ export const SAMPLE_QUESTIONNAIRES: Questionnaire[] = [
       { id: 'research_direction', text: '研究方向', type: 'text', required: true },
       { id: 'interests', text: '学术兴趣标签（空格分隔）', type: 'tags', required: true },
       { id: 'research_rating', text: '科研热情评分', type: 'rating', required: true, max: 5, min: 1 },
+      { id: 'collab_style', text: '你更喜欢的合作方式', type: 'single_choice', required: true, options: [{ value: 'team', label: '团队项目' }, { value: 'pair', label: '结对学习' }, { value: 'mentor', label: '寻找导师/带教' }, { value: 'discuss', label: '话题讨论' }] },
+      { id: 'academic_goal', text: '近期学术目标', type: 'text', required: false },
     ],
   },
   {
@@ -41,6 +43,7 @@ export const SAMPLE_QUESTIONNAIRES: Questionnaire[] = [
       { id: 'mbti', text: 'MBTI', type: 'single_choice', required: true, options: ['INTJ', 'INTP', 'ENTJ', 'ENTP', 'INFJ', 'INFP', 'ENFJ', 'ENFP', 'ISTJ', 'ISFJ', 'ESTJ', 'ESFJ', 'ISTP', 'ISFP', 'ESTP', 'ESFP'].map(v => ({ value: v, label: v })) },
       { id: 'interests', text: '兴趣爱好（空格分隔）', type: 'tags', required: true },
       { id: 'location', text: '常驻地', type: 'text', required: true },
+      { id: 'daily_rhythm', text: '你的日常作息偏好', type: 'single_choice', required: true, options: [{ value: 'early', label: '早睡早起' }, { value: 'night', label: '夜猫子' }, { value: 'flexible', label: '灵活安排' }] },
       { id: 'bio', text: '自我介绍', type: 'text', required: false },
     ],
   },
@@ -55,6 +58,7 @@ export const SAMPLE_QUESTIONNAIRES: Questionnaire[] = [
       { id: 'ideal_person', text: '理想伴侣', type: 'text', required: false },
       { id: 'family_status', text: '家庭状况', type: 'text', required: false },
       { id: 'dating_rating', text: '脱单意愿', type: 'rating', required: true, max: 5, min: 1 },
+      { id: 'values', text: '你最看重的品质（多选）', type: 'multiple_choice', required: true, options: [{ value: 'kind', label: '善良' }, { value: 'humor', label: '幽默' }, { value: 'ambition', label: '上进' }, { value: 'appearance', label: '眼缘' }, { value: 'common', label: '共同爱好' }] },
     ],
   },
 ];
@@ -97,29 +101,56 @@ export function QuestionnaireForm({ questionnaire, initialAnswers = {}, onSubmit
     onSubmit(answers);
   };
 
+  const progress = Math.min(100, Math.round((Object.keys(answers).length / Math.max(1, questionnaire.questions.length)) * 100));
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <div>
-        <h1 className="text-xl font-bold">{questionnaire.title}</h1>
-        {questionnaire.description && <p className="text-sm text-gray-500">{questionnaire.description}</p>}
+    <form onSubmit={handleSubmit} className="space-y-5 animate-fade-in">
+      <div className="rounded-3xl bg-gradient-to-br from-brand-500 to-accent-500 p-6 text-white shadow-elevated">
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-extrabold">{questionnaire.title}</h1>
+            {questionnaire.description && <p className="mt-1 text-sm text-white/90">{questionnaire.description}</p>}
+          </div>
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/20 backdrop-blur">
+            <HelpCircle className="h-6 w-6 text-white" />
+          </div>
+        </div>
+        <div className="mt-5">
+          <div className="mb-1 flex justify-between text-xs font-semibold text-white/90">
+            <span>完成度</span>
+            <span>{progress}%</span>
+          </div>
+          <div className="h-2 w-full overflow-hidden rounded-full bg-white/20">
+            <div className="h-full rounded-full bg-white transition-all" style={{ width: `${progress}%` }} />
+          </div>
+        </div>
       </div>
-      {questionnaire.questions.map((q) => (
-        <Card key={q.id}>
-          <label className="mb-2 block text-sm font-medium text-gray-800">
-            {q.text}
-            {q.required && <span className="ml-1 text-red-500">*</span>}
-          </label>
-          <QuestionInput
-            question={q}
-            value={answers[q.id]}
-            onChange={(v) => set(q.id, v)}
-            onToggle={(v) => toggleMulti(q.id, v)}
-            onAddTag={(v) => addTag(q.id, v)}
-            onRemoveTag={(v) => removeTag(q.id, v)}
-          />
+
+      {questionnaire.questions.map((q, idx) => (
+        <Card key={q.id} hover className="relative overflow-hidden">
+          <div className="absolute left-0 top-0 h-full w-1 bg-gradient-to-b from-brand-400 to-accent-400" />
+          <div className="pl-4">
+            <label className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-900">
+              <span className="flex h-5 w-5 items-center justify-center rounded-md bg-brand-100 text-[10px] font-black text-brand-600">
+                {idx + 1}
+              </span>
+              {q.text}
+              {q.required && <span className="text-red-500">*</span>}
+            </label>
+            <QuestionInput
+              question={q}
+              value={answers[q.id]}
+              onChange={(v) => set(q.id, v)}
+              onToggle={(v) => toggleMulti(q.id, v)}
+              onAddTag={(v) => addTag(q.id, v)}
+              onRemoveTag={(v) => removeTag(q.id, v)}
+            />
+          </div>
         </Card>
       ))}
-      <Button type="submit" isLoading={isSubmitting} className="w-full">
+
+      <Button type="submit" isLoading={isSubmitting} className="w-full shadow-soft">
+        <CheckCircle2 className="mr-2 h-4 w-4" />
         提交问卷
       </Button>
     </form>
@@ -150,8 +181,10 @@ function QuestionInput({
         {question.options?.map((opt) => (
           <label
             key={opt.value}
-            className={`cursor-pointer rounded-lg border px-3 py-2 text-sm transition ${
-              value === opt.value ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-gray-200 bg-white hover:bg-gray-50'
+            className={`cursor-pointer rounded-xl border-2 px-4 py-2.5 text-sm font-semibold transition-all ${
+              value === opt.value
+                ? 'border-brand-500 bg-brand-50 text-brand-700'
+                : 'border-slate-100 bg-white text-slate-600 hover:border-slate-200 hover:bg-slate-50'
             }`}
           >
             <input type="radio" name={question.id} value={opt.value} checked={value === opt.value} onChange={() => onChange(opt.value)} className="sr-only" />
@@ -170,8 +203,10 @@ function QuestionInput({
           return (
             <label
               key={opt.value}
-              className={`cursor-pointer rounded-lg border px-3 py-2 text-sm transition ${
-                selected ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-gray-200 bg-white hover:bg-gray-50'
+              className={`cursor-pointer rounded-xl border-2 px-4 py-2.5 text-sm font-semibold transition-all ${
+                selected
+                  ? 'border-brand-500 bg-brand-50 text-brand-700'
+                  : 'border-slate-100 bg-white text-slate-600 hover:border-slate-200 hover:bg-slate-50'
               }`}
             >
               <input type="checkbox" checked={selected} onChange={() => onToggle(opt.value)} className="sr-only" />
@@ -189,8 +224,13 @@ function QuestionInput({
     return (
       <div className="flex items-center gap-1">
         {Array.from({ length: max }).map((_, i) => (
-          <button type="button" key={i} onClick={() => onChange(i + 1)} className="p-1">
-            <Star className={`h-6 w-6 ${i < rating ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`} />
+          <button
+            type="button"
+            key={i}
+            onClick={() => onChange(i + 1)}
+            className="rounded-lg p-1 transition hover:scale-110"
+          >
+            <Star className={`h-8 w-8 ${i < rating ? 'fill-amber-400 text-amber-400' : 'text-slate-200'}`} />
           </button>
         ))}
       </div>
@@ -217,9 +257,9 @@ function QuestionInput({
             添加
           </Button>
         </div>
-        <div className="mt-2 flex flex-wrap gap-2">
+        <div className="mt-3 flex flex-wrap gap-2">
           {tags.map((tag) => (
-            <span key={tag} className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-xs text-brand-700">
+            <span key={tag} className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-3 py-1 text-xs font-bold text-brand-700">
               {tag}
               <button type="button" onClick={() => onRemoveTag(tag)} className="text-brand-700 hover:text-brand-900">×</button>
             </span>

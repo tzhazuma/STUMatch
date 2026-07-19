@@ -51,9 +51,11 @@ export interface DiscoveryItem {
   avatar_url?: string;
   age?: number;
   education_level?: string;
+  school?: string;
   major?: string;
   interests?: string[];
   location?: string;
+  bio?: string;
   match_score?: number;
   match_reason?: string;
 }

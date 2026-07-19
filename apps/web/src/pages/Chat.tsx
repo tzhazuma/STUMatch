@@ -2,11 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Card } from '@/components/ui/Card';
 import { getMessages, sendMessage } from '@/api/endpoints';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { useAuthStore } from '@/store/authStore';
 import type { Message } from '@/types';
+import { Send, Loader2 } from 'lucide-react';
 
 export default function Chat() {
   const { conversationId } = useParams<{ conversationId: string }>();
@@ -54,41 +54,64 @@ export default function Chat() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] flex-col">
-      <Card className="flex-1 overflow-y-auto p-4">
+    <div className="flex h-[calc(100vh-9rem)] flex-col animate-fade-in">
+      <div className="flex-1 overflow-y-auto rounded-3xl border border-slate-100 bg-white p-4 shadow-card scrollbar-hide">
         {loading ? (
-          <p className="text-center text-sm text-gray-500">加载中...</p>
+          <div className="flex h-full flex-col items-center justify-center gap-3 text-slate-400">
+            <Loader2 className="h-6 w-6 animate-spin text-brand-500" />
+            <p className="text-sm">加载消息中...</p>
+          </div>
+        ) : messages.length === 0 ? (
+          <div className="flex h-full flex-col items-center justify-center text-center text-slate-400">
+            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-100">
+              <Send className="h-6 w-6" />
+            </div>
+            <p className="text-sm">开始聊天吧</p>
+          </div>
         ) : (
-          <div className="space-y-3">
-            {messages.map((m) => (
-              <div
-                key={m.id}
-                className={`flex ${m.sender_id === user?.id ? 'justify-end' : 'justify-start'}`}
-              >
-                <div
-                  className={`max-w-[70%] rounded-lg px-4 py-2 text-sm ${
-                    m.sender_id === user?.id
-                      ? 'bg-brand-600 text-white'
-                      : 'bg-gray-100 text-gray-800'
-                  }`}
-                >
-                  {m.content}
+          <div className="space-y-4">
+            {messages.map((m, idx) => {
+              const isMe = m.sender_id === user?.id;
+              const showTime =
+                idx === 0 ||
+                new Date(m.created_at).getTime() - new Date(messages[idx - 1].created_at).getTime() > 5 * 60 * 1000;
+              return (
+                <div key={m.id}>
+                  {showTime && (
+                    <p className="mb-3 text-center text-[10px] text-slate-400">
+                      {new Date(m.created_at).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  )}
+                  <div className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                    <div
+                      className={`max-w-[78%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm ${
+                        isMe
+                          ? 'bg-gradient-to-br from-brand-500 to-brand-600 text-white rounded-br-md'
+                          : 'bg-slate-100 text-slate-800 rounded-bl-md'
+                      }`}
+                    >
+                      {m.content}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
             <div ref={bottomRef} />
           </div>
         )}
-      </Card>
-      <div className="mt-2 flex gap-2">
+      </div>
+
+      <div className="mt-3 flex items-center gap-2 rounded-2xl border border-slate-100 bg-white/80 p-2 shadow-soft backdrop-blur">
         <Input
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="输入消息..."
           onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-          className="flex-1"
+          className="border-0 bg-transparent shadow-none focus:ring-0"
         />
-        <Button onClick={handleSend}>发送</Button>
+        <Button onClick={handleSend} className="rounded-xl px-4">
+          <Send className="h-4 w-4" />
+        </Button>
       </div>
     </div>
   );
