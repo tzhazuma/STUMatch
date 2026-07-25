@@ -1,0 +1,30 @@
+
+digraph arch {
+  bgcolor="white"; dpi=150; rankdir=TB; nodesep=0.35; ranksep=0.55;
+  graph [fontname="Noto Sans CJK SC"];
+  node [fontname="Noto Sans CJK SC", fontsize=13, shape=box, style="rounded,filled",
+        color="#22222A", penwidth=1.2, height=0.5, margin="0.18,0.10"];
+  edge [color="#6B6B78", arrowsize=0.7, penwidth=1.1];
+  subgraph { rank=same; Web; Mobile; }
+  Web [label="React Web", fillcolor="#EDE9FE"];
+  Mobile [label="Expo Mobile", fillcolor="#EDE9FE"];
+  API [label="FastAPI 网关  ·  REST + WebSocket", fillcolor="#7C3AED", fontcolor="white", width=4.2];
+  subgraph { rank=same; AUTH; PROF; REC; MOD; IM; REF; }
+  AUTH [label="认证\n邮箱白名单", fillcolor="#F6F4EE"];
+  PROF [label="资料 / 问卷", fillcolor="#F6F4EE"];
+  REC  [label="推荐引擎", fillcolor="#FFEDD5"];
+  MOD  [label="内容审核\nDFA", fillcolor="#FFEDD5"];
+  IM   [label="即时通讯", fillcolor="#F6F4EE"];
+  REF  [label="邀请转发", fillcolor="#F6F4EE"];
+  AIGW [label="AI 网关  ·  多 Provider 兼容", fillcolor="#7C3AED", fontcolor="white", width=3.4];
+  subgraph { rank=same; PG; REDIS; MINIO; }
+  PG [label="PostgreSQL\n+ pgvector", shape=cylinder, fillcolor="#EDE9FE"];
+  REDIS [label="Redis\n会话/缓存", shape=cylinder, fillcolor="#EDE9FE"];
+  MINIO [label="MinIO / S3\n对象存储", shape=cylinder, fillcolor="#EDE9FE"];
+  Web->API; Mobile->API;
+  API->AUTH; API->PROF; API->REC; API->MOD; API->IM; API->REF;
+  REC->AIGW; MOD->AIGW;
+  AUTH->REDIS; PROF->PG; REC->PG; REC->REDIS; MOD->PG; IM->REDIS; REF->PG;
+  AIGW->PG;
+  PROF->MINIO;
+}

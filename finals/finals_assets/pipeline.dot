@@ -1,0 +1,22 @@
+
+digraph pipe {
+  bgcolor="white"; dpi=150; rankdir=LR; nodesep=0.3; ranksep=0.45;
+  node [fontname="Noto Sans CJK SC", fontsize=12.5, shape=box, style="rounded,filled",
+        color="#22222A", penwidth=1.2, margin="0.16,0.10"];
+  edge [color="#6B6B78", arrowsize=0.7, penwidth=1.1];
+  LREC [label="推荐流水线", shape=none, fontname="Noto Sans CJK SC", fontsize=14, fontcolor="#7C3AED"];
+  VEC [label="向量召回\npgvector", fillcolor="#EDE9FE"];
+  RULE [label="规则打分\n分板块", fillcolor="#EDE9FE"];
+  TT [label="Two-Tower\n精排", fillcolor="#EDE9FE"];
+  MMR [label="MMR\n多样性重排", fillcolor="#EDE9FE"];
+  EXP [label="AI 可解释\n匹配理由", fillcolor="#7C3AED", fontcolor="white"];
+  LREC->VEC [style=invis];
+  VEC->RULE->TT->MMR->EXP;
+  LFT [label="微调流水线", shape=none, fontname="Noto Sans CJK SC", fontsize=14, fontcolor="#EA580C"];
+  FB [label="用户反馈\nlike/skip", fillcolor="#FFEDD5"];
+  SFT [label="SFT / DPO\n数据导出", fillcolor="#FFEDD5"];
+  QLO [label="QLoRA 微调\nQwen2.5", fillcolor="#FFEDD5"];
+  GGU [label="合并 / 导出\nGGUF", fillcolor="#EA580C", fontcolor="white"];
+  LFT->FB [style=invis];
+  FB->SFT->QLO->GGU;
+}
