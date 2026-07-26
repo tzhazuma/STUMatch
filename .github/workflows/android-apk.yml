@@ -9,6 +9,9 @@ jobs:
   build-and-release:
     name: Build Android APK and Web, then Release
     runs-on: ubuntu-latest
+    concurrency:
+      group: android-apk-release-${{ github.ref }}
+      cancel-in-progress: false
     permissions:
       contents: write
 
@@ -84,9 +87,14 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="v0.1.0"
-          gh release delete "$TAG" --yes || true
-          gh release create "$TAG" \
+          # Idempotent cleanup so re-runs / leftover tag+release never cause HTTP 422.
+          set +e
+          gh release delete "$TAG" --yes --cleanup-tag || true
+          git push origin --delete "refs/tags/$TAG" || true
+          git tag -d "$TAG" || true
+          set -e
+          gh release create "$TAG" --target "$GITHUB_SHA" \
             --title "UniMatch v0.1.0" \
-            --notes "Android APK 与 Web 构建包" \
+            --notes "Android APK 与 Web 构建包（CI 自动构建）" \
             apps/mobile/dist-mobile/unimatch-release.apk \
             apps/mobile/dist-mobile/unimatch-web-dist.zip
