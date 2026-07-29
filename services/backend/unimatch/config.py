@@ -34,13 +34,32 @@ class Settings(BaseSettings):
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
 
-    # SMTP / Email
-    MAIL_PROVIDER: Optional[str] = None  # smtp or mock
+    # SMTP / Email — generic (used when MAIL_PROVIDER=smtp)
+    MAIL_PROVIDER: Optional[str] = None  # smtp | netease_126 | shanghaitech | mock
     SMTP_HOST: Optional[str] = None
     SMTP_PORT: int = 587
     SMTP_USER: Optional[str] = None
     SMTP_PASSWORD: Optional[str] = None
     SMTP_FROM: Optional[str] = None
+
+    # SMTP / Email — 126 preset (used when MAIL_PROVIDER=netease_126)
+    NETEASE126_SMTP_HOST: Optional[str] = None
+    NETEASE126_SMTP_PORT: int = 465
+    NETEASE126_SENDER: Optional[str] = None
+    NETEASE126_USERNAME: Optional[str] = None
+    NETEASE126_PASSWORD: Optional[str] = None
+
+    # SMTP / Email — ShanghaiTech preset (used when MAIL_PROVIDER=shanghaitech)
+    SHANGHAITECH_SMTP_HOST: Optional[str] = None
+    SHANGHAITECH_SMTP_PORT: int = 465
+    SHANGHAITECH_SENDER: Optional[str] = None
+    SHANGHAITECH_USERNAME: Optional[str] = None
+    SHANGHAITECH_PASSWORD: Optional[str] = None
+
+    # Verification code TTL (seconds) and rate limits
+    CODE_TTL: int = 600
+    RATE_LIMIT_PER_EMAIL: int = 5
+    RATE_LIMIT_PER_PHONE: int = 5
 
     # SMS
     SMS_PROVIDER: Optional[str] = None  # twilio, aliyun, tencent, mock
@@ -104,9 +123,58 @@ class Settings(BaseSettings):
 
     @property
     def effective_email_provider(self) -> str:
-        if self.MAIL_PROVIDER:
-            return self.MAIL_PROVIDER
+        """Return 'smtp' if any SMTP convention is configured, else 'mock'."""
+        if self.MAIL_PROVIDER and self.MAIL_PROVIDER.lower() not in ("mock", ""):
+            return "smtp"
+        # Auto-detect: if any SMTP host is set, treat as smtp
+        if self.SMTP_HOST or self.NETEASE126_SMTP_HOST or self.SHANGHAITECH_SMTP_HOST:
+            return "smtp"
         return "mock"
+
+    @property
+    def effective_smtp_host(self) -> Optional[str]:
+        provider = (self.MAIL_PROVIDER or "").lower()
+        if provider == "netease_126":
+            return self.NETEASE126_SMTP_HOST
+        if provider == "shanghaitech":
+            return self.SHANGHAITECH_SMTP_HOST
+        return self.SMTP_HOST
+
+    @property
+    def effective_smtp_port(self) -> int:
+        provider = (self.MAIL_PROVIDER or "").lower()
+        if provider == "netease_126":
+            return self.NETEASE126_SMTP_PORT
+        if provider == "shanghaitech":
+            return self.SHANGHAITECH_SMTP_PORT
+        return self.SMTP_PORT
+
+    @property
+    def effective_smtp_user(self) -> Optional[str]:
+        provider = (self.MAIL_PROVIDER or "").lower()
+        if provider == "netease_126":
+            return self.NETEASE126_USERNAME
+        if provider == "shanghaitech":
+            return self.SHANGHAITECH_USERNAME
+        return self.SMTP_USER
+
+    @property
+    def effective_smtp_password(self) -> Optional[str]:
+        provider = (self.MAIL_PROVIDER or "").lower()
+        if provider == "netease_126":
+            return self.NETEASE126_PASSWORD
+        if provider == "shanghaitech":
+            return self.SHANGHAITECH_PASSWORD
+        return self.SMTP_PASSWORD
+
+    @property
+    def effective_smtp_from(self) -> Optional[str]:
+        provider = (self.MAIL_PROVIDER or "").lower()
+        if provider == "netease_126":
+            return self.NETEASE126_SENDER or self.NETEASE126_USERNAME
+        if provider == "shanghaitech":
+            return self.SHANGHAITECH_SENDER or self.SHANGHAITECH_USERNAME
+        return self.SMTP_FROM or self.SMTP_USER
 
     @property
     def effective_ai_provider(self) -> str:

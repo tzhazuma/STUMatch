@@ -37,7 +37,7 @@ export default function Login() {
         });
       }, 1000);
     } catch (e: any) {
-      setError(e?.response?.data?.message || e?.message || '发送失败');
+      setError(e?.response?.data?.detail || e?.response?.data?.message || e?.message || '发送失败');
     } finally {
       setLoading(false);
     }
@@ -59,7 +59,7 @@ export default function Login() {
       }
       navigate('/discovery/academic');
     } catch (e: any) {
-      setError(e?.response?.data?.message || e?.message || '操作失败');
+      setError(e?.response?.data?.detail || e?.response?.data?.message || e?.message || '操作失败');
     } finally {
       setLoading(false);
     }

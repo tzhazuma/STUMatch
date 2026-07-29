@@ -33,9 +33,9 @@ export default function LoginScreen() {
     try {
       await API.auth.sendCode(email, mode === 'register' ? 'register' : 'login');
       setCodeSent(true);
-      Alert.alert('验证码已发送，请在控制台/日志查看');
+      Alert.alert('验证码已发送到您的邮箱，请查收');
     } catch (e: any) {
-      Alert.alert('发送失败', e?.message || '未知错误');
+      Alert.alert('发送失败', e?.response?.data?.detail || e?.response?.data?.message || e?.message || '未知错误');
     } finally {
       setLoading(false);
     }
@@ -56,7 +56,7 @@ export default function LoginScreen() {
       }
       setAuth(res, res.user);
     } catch (e: any) {
-      Alert.alert('失败', e?.response?.data?.message || e?.message || '未知错误');
+      Alert.alert('失败', e?.response?.data?.detail || e?.response?.data?.message || e?.message || '未知错误');
     } finally {
       setLoading(false);
     }
