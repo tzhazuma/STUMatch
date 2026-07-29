@@ -20,9 +20,16 @@ export function useWebSocket() {
   const connect = useCallback(() => {
     if (!access_token || ws.current?.readyState === WebSocket.OPEN) return;
 
-    const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
-    const wsUrl = baseURL.replace(/^http/, 'ws');
-    const socket = new WebSocket(`${wsUrl}/ws/chat?token=${access_token}`);
+    // Host-agnostic WS: absolute envBase → derive ws(s); empty → follow page origin
+    const envBase = import.meta.env.VITE_API_BASE_URL;
+    let wsBase: string;
+    if (envBase && /^https?:\/\//.test(envBase)) {
+      wsBase = envBase.replace(/^http/, 'ws');
+    } else {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      wsBase = `${proto}//${location.host}`;
+    }
+    const socket = new WebSocket(`${wsBase}/ws/chat?token=${access_token}`);
 
     socket.onopen = () => setConnected(true);
     socket.onclose = () => {

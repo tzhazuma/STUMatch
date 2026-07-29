@@ -2,7 +2,9 @@ import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import { useAuthStore } from '@/store/authStore';
 import { refreshAccessToken } from './endpoints';
 
-const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+// Host-agnostic: empty/relative → same-origin (nginx); absolute → direct (tunnel/LAN)
+const envBase = import.meta.env.VITE_API_BASE_URL;
+const baseURL = envBase && /^https?:\/\//.test(envBase) ? envBase : (envBase || '');
 
 export const apiClient = axios.create({
   baseURL,

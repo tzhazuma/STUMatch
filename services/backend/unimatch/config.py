@@ -87,6 +87,9 @@ class Settings(BaseSettings):
     MODERATION_PROVIDER: Optional[str] = None  # openai, aliyun, tencent
     MODERATION_SENSITIVE_WORDS: Optional[str] = None  # comma-separated
 
+    # CORS (comma-separated origins or "*" for demo; production should list exact origins)
+    CORS_ORIGINS: str = "*"
+
     # Celery
     CELERY_BROKER_URL: Optional[str] = None
     CELERY_RESULT_BACKEND: Optional[str] = None
