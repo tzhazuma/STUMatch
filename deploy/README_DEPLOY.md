@@ -269,3 +269,41 @@ A: 同源 nginx 部署已配 `try_files ... /index.html`（SPA fallback）。`vi
 
 **Q: CORS 报错 `credentials flag + wildcard origin`？**
 A: 代码已处理：`CORS_ORIGINS=*` 时自动 `allow_credentials=False`。若前端某请求需带 cookie（当前不需要），则把 `CORS_ORIGINS` 改为精确 origin 列表。
+
+---
+
+## 实际部署记录（2026-07-30）
+
+### 路径 B：校园网内网 ✅
+
+- **服务器**：`tangzh@10.19.138.148`（Ubuntu 24.04, 112 核, 512GB RAM）
+- **访问地址**：`http://10.19.138.148:8888`（nginx 同源反代）或 `http://10.19.138.148:4173`（vite preview 直连）
+- **后端 API**：`http://10.19.138.148:8001/docs`
+- **部署方式**：apt 装 PostgreSQL 16 + pgvector 0.6 + Redis 7 + nginx；Python venv + uvicorn；前端 `VITE_API_BASE_URL=""` build（同源）+ nginx 8888 端口反代
+- **校园网内任何设备**（含 atrust 连入的校外设备）打开上述地址即可体验
+
+### 路径 A：公网隧道 ✅
+
+- **隧道工具**：cloudflared quick tunnel（运行在校园网服务器上，该服务器有公网出口）
+- **公网访问地址**：`https://radical-scholars-plots-beyond.trycloudflare.com`
+- **原理**：cloudflared 在 10.19.138.148 上开出站隧道到 Cloudflare 边缘 → 边缘分配临时域名 → 全球任何人访问该域名 → CF 边缘 → 隧道 → nginx 8888 → 前端静态 + API 反代
+- **注意**：quick tunnel 域名在 cloudflared 进程重启后会变；演示期间保持进程在线即可
+- **校外评委/任何人**无需校园网、无需 atrust，直接打开上述 HTTPS 链接即可体验完整应用
+
+### 部署脚本（可复现）
+
+远程服务器上保留的脚本：
+- `~/rd.sh` — 首次部署（apt + pg + redis + venv + pip + backend + frontend build）
+- `~/rncf.sh` — nginx 配置 + cloudflared 隧道
+- `~/remote_fix_nginx_cf.sh` — nginx 修复 + cloudflared 启动
+
+WSL 侧 SSH 桥接方式（因 WSL 无法直连 10.x 校园网 IP）：
+```bash
+# 通过 Windows 宿主机 SSH 转发
+powershell.exe -Command "
+  \$env:SSH_ASKPASS='C:\Users\tzh03\askpass.cmd';
+  \$env:SSH_ASKPASS_REQUIRE='force';
+  \$env:DISPLAY='dummy';
+  ssh -o StrictHostKeyChecking=no tangzh@10.19.138.148 '<command>'
+"
+```
