@@ -178,6 +178,8 @@ export const sendMessage = (
   content: string,
   messageType: 'text' | 'image' = 'text'
 ) => post<Message>(`/conversations/${conversationId}/messages`, { content, message_type: messageType });
+export const openConversation = (userId: string) =>
+  post<{ id: string }>('/conversations/open', { user_id: userId });
 export const uploadImageMessage = (conversationId: string, file: File) => {
   const form = new FormData();
   form.append('file', file);

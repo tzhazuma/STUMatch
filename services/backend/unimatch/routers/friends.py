@@ -10,6 +10,7 @@ from unimatch.database import get_db
 from unimatch.models import Friendship, User
 from unimatch.schemas import ApiResponse, FriendOut, FriendRequestIn, FriendRequestOut
 from unimatch.security import get_current_user
+from unimatch.services.chat_manager import get_or_create_conversation
 
 router = APIRouter(prefix="/friends", tags=["friends"])
 
@@ -116,6 +117,8 @@ async def list_friends(
         friend = await db.get(User, friend_id)
         if not friend:
             continue
+        # Ensure a conversation exists so the friend row carries a valid chat id.
+        conv = await get_or_create_conversation(db, current_user.id, friend_id)
         friends.append(
             FriendOut(
                 user_id=friend.id,
@@ -123,8 +126,10 @@ async def list_friends(
                 avatar_url=friend.profile.avatar_url if friend.profile else None,
                 school=friend.school,
                 major=friend.profile.major if friend.profile else None,
+                conversation_id=conv.id,
             ).model_dump()
         )
+    await db.commit()
     return {"data": friends}
 
 

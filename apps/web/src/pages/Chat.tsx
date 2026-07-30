@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { getMessages, sendMessage } from '@/api/endpoints';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { useAuthStore } from '@/store/authStore';
+import { errorMessage, toast } from '@/components/ui/Toast';
 import type { Message } from '@/types';
 import { Send, Loader2 } from 'lucide-react';
 
@@ -14,43 +15,96 @@ export default function Chat() {
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(true);
   const { user } = useAuthStore();
-  const { connected, messages: wsMessages, send } = useWebSocket();
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Merge an inbound WS message into the current list: drop a matching
+  // optimistic placeholder (same sender + content) and de-duplicate by id.
+  const mergeIncoming = useCallback(
+    (msg: Message) => {
+      if (!conversationId || msg.conversation_id !== conversationId) return;
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === msg.id)) return prev;
+        const withoutPlaceholder = prev.filter(
+          (m) =>
+            !(
+              m._pending &&
+              m.sender_id === msg.sender_id &&
+              m.content === msg.content
+            )
+        );
+        return [...withoutPlaceholder, msg];
+      });
+    },
+    [conversationId]
+  );
+
+  const handleWsMessage = useCallback(
+    (data: Record<string, unknown>) => {
+      if (data.type === 'new_message') {
+        const msg = (data.message ?? data.payload) as Message | undefined;
+        if (msg) mergeIncoming(msg);
+      } else if (data.type === 'error') {
+        toast.error(typeof data.message === 'string' ? data.message : '发送失败');
+      }
+    },
+    [mergeIncoming]
+  );
+
+  const { connected, send } = useWebSocket({ onMessage: handleWsMessage });
 
   useEffect(() => {
     if (!conversationId) return;
     setLoading(true);
     getMessages(conversationId, { page: 1, limit: 50 })
       .then((res) => setMessages(res.items))
+      .catch(() => toast.error('加载消息失败'))
       .finally(() => setLoading(false));
   }, [conversationId]);
-
-  useEffect(() => {
-    if (wsMessages.length) {
-      const last = wsMessages[wsMessages.length - 1];
-      if (last.conversation_id === conversationId) {
-        setMessages((prev) => [...prev, last]);
-      }
-    }
-  }, [wsMessages, conversationId]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   const handleSend = async () => {
-    if (!text.trim() || !conversationId) return;
-    if (connected) {
-      send({
-        type: 'send_message',
-        payload: { conversation_id: conversationId, content: text, message_type: 'text' },
-      });
-    } else {
-      await sendMessage(conversationId, text);
-      const res = await getMessages(conversationId, { page: 1, limit: 50 });
-      setMessages(res.items);
-    }
+    const content = text.trim();
+    if (!content || !conversationId) return;
     setText('');
+
+    const placeholder: Message = {
+      id: `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      conversation_id: conversationId,
+      sender_id: user?.id || '',
+      content,
+      message_type: 'text',
+      created_at: new Date().toISOString(),
+      _pending: true,
+    };
+    setMessages((prev) => [...prev, placeholder]);
+
+    if (connected) {
+      const ok = send({
+        type: 'send_message',
+        payload: { conversation_id: conversationId, content, message_type: 'text' },
+      });
+      if (!ok) {
+        // Socket closed between the check and send — fall back to REST.
+        await sendViaRest(conversationId, content, placeholder.id);
+      }
+      // When WS is up the server echoes the message back to us (and the peer),
+      // which mergeIncoming turns into the confirmed message.
+    } else {
+      await sendViaRest(conversationId, content, placeholder.id);
+    }
+  };
+
+  const sendViaRest = async (convId: string, content: string, placeholderId: string) => {
+    try {
+      const saved = await sendMessage(convId, content);
+      setMessages((prev) => prev.map((m) => (m.id === placeholderId ? { ...saved, _pending: false } : m)));
+    } catch (e) {
+      setMessages((prev) => prev.filter((m) => m.id !== placeholderId));
+      toast.error(errorMessage(e, '消息发送失败'));
+    }
   };
 
   return (
@@ -88,7 +142,7 @@ export default function Chat() {
                         isMe
                           ? 'bg-gradient-to-br from-brand-500 to-brand-600 text-white rounded-br-md'
                           : 'bg-slate-100 text-slate-800 rounded-bl-md'
-                      }`}
+                      } ${m._pending ? 'opacity-60' : ''}`}
                     >
                       {m.content}
                     </div>

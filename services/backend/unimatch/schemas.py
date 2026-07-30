@@ -238,6 +238,11 @@ class FriendOut(BaseModel):
     avatar_url: str | None
     school: str | None
     major: str | None
+    conversation_id: uuid.UUID | None = None
+
+
+class OpenConversationIn(BaseModel):
+    user_id: uuid.UUID
 
 
 class MessageOut(BaseModel):

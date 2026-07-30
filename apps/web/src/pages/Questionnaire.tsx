@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { QuestionnaireForm } from '@/components/QuestionnaireForm';
 import { getQuestionnaire, submitQuestionnaire, getMyResponse } from '@/api/endpoints';
+import { errorMessage, toast } from '@/components/ui/Toast';
 import type { Questionnaire } from '@/types';
 
 export default function QuestionnairePage() {
@@ -28,10 +29,10 @@ export default function QuestionnairePage() {
     setSubmitting(true);
     try {
       await submitQuestionnaire(slug, { answers: data });
-      alert('提交成功');
+      toast.success('提交成功');
       navigate('/profile');
-    } catch (e: any) {
-      alert(e?.response?.data?.message || '提交失败');
+    } catch (e) {
+      toast.error(errorMessage(e, '提交失败'));
     } finally {
       setSubmitting(false);
     }

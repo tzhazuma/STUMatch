@@ -145,6 +145,8 @@ export interface Message {
   message_type: 'text' | 'image';
   created_at: string;
   is_read?: boolean;
+  /** Frontend-only flag for optimistic (not-yet-confirmed) messages. */
+  _pending?: boolean;
 }
 
 export interface MessageBoardItem {

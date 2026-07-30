@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Avatar } from '@/components/ui/Avatar';
-import { discoveryUserDetail, sendFriendRequest } from '@/api/endpoints';
+import { discoveryUserDetail, sendFriendRequest, openConversation } from '@/api/endpoints';
+import { errorMessage, toast } from '@/components/ui/Toast';
 import type { DiscoveryDetail, Section } from '@/types';
 
 const tagColors = [
@@ -34,9 +35,19 @@ export default function UserDetail() {
     if (!userId) return;
     try {
       await sendFriendRequest({ to_user_id: userId, message: '想认识你' });
-      alert('好友申请已发送');
-    } catch (e: any) {
-      alert(e?.response?.data?.message || '发送失败');
+      toast.success('好友申请已发送');
+    } catch (e) {
+      toast.error(errorMessage(e, '发送失败'));
+    }
+  };
+
+  const handleChat = async () => {
+    if (!userId) return;
+    try {
+      const { id } = await openConversation(userId);
+      navigate(`/chat/${id}`);
+    } catch (e) {
+      toast.error(errorMessage(e, '无法打开会话'));
     }
   };
 
@@ -131,7 +142,7 @@ export default function UserDetail() {
           <UserPlus className="h-4 w-4" />
           加好友
         </Button>
-        <Button variant="secondary" onClick={() => navigate('/chat/new')} className="flex items-center justify-center gap-2">
+        <Button variant="secondary" onClick={handleChat} className="flex items-center justify-center gap-2">
           <MessageCircle className="h-4 w-4" />
           聊天
         </Button>

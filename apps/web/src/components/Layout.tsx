@@ -1,6 +1,7 @@
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Users, UserCircle, MessageCircle, LogOut, Sparkles } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { Toaster } from '@/components/ui/Toast';
 
 export function Layout() {
   const { pathname } = useLocation();
@@ -17,6 +18,7 @@ export function Layout() {
 
   return (
     <div className="flex min-h-full flex-col bg-slate-50">
+      <Toaster />
       <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/85 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-2xl items-center justify-between px-4">
           <Link to="/" className="flex items-center gap-2">

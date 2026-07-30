@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
 import { UserCard } from '@/components/UserCard';
 import { Modal } from '@/components/ui/Modal';
+import { errorMessage, toast } from '@/components/ui/Toast';
 import {
   discoveryUsers,
   setPush,
@@ -89,9 +90,9 @@ export default function Discovery() {
     }
     try {
       await sendFriendRequest({ to_user_id: user.user_id, message: '想认识你' });
-      alert('好友申请已发送');
-    } catch (e: any) {
-      alert(e?.response?.data?.message || '发送失败');
+      toast.success('好友申请已发送');
+    } catch (e) {
+      toast.error(errorMessage(e, '发送失败'));
     }
   };
 

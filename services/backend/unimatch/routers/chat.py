@@ -15,6 +15,7 @@ from unimatch.schemas import (
     LastMessage,
     MessageIn,
     MessageOut,
+    OpenConversationIn,
 )
 from unimatch.security import get_current_user
 from unimatch.services.chat_manager import get_or_create_conversation
@@ -144,3 +145,24 @@ async def mark_read(
     await db.commit()
     await db.refresh(message)
     return {"data": MessageOut.model_validate(message).model_dump()}
+
+
+@router.post("/conversations/open", response_model=ApiResponse)
+async def open_conversation(
+    payload: OpenConversationIn,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Get-or-create a conversation with another user and return its id.
+
+    Used by the discovery / user-detail "chat" buttons so the client always
+    navigates to a real conversation id instead of a placeholder.
+    """
+    if payload.user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="cannot open conversation with yourself")
+    target = await db.get(User, payload.user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="target user not found")
+    conv = await get_or_create_conversation(db, current_user.id, payload.user_id)
+    await db.commit()
+    return {"data": {"id": str(conv.id)}}

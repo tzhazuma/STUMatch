@@ -9,13 +9,21 @@ export interface WSEvent {
   payload: Record<string, unknown>;
 }
 
-export function useWebSocket() {
+export interface UseWebSocketOptions {
+  /** Called with every parsed inbound frame (after internal state is updated). */
+  onMessage?: (data: Record<string, unknown>) => void;
+}
+
+export function useWebSocket(options: UseWebSocketOptions = {}) {
   const { access_token } = useAuthStore();
   const ws = useRef<WebSocket | null>(null);
   const [connected, setConnected] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [lastEvent, setLastEvent] = useState<Record<string, unknown> | null>(null);
   const reconnectTimer = useRef<number | null>(null);
+  // Keep the latest callback without forcing a reconnect when it changes.
+  const onMessageRef = useRef(options.onMessage);
+  onMessageRef.current = options.onMessage;
 
   const connect = useCallback(() => {
     if (!access_token || ws.current?.readyState === WebSocket.OPEN) return;
@@ -44,13 +52,17 @@ export function useWebSocket() {
     socket.onerror = (e) => console.error('WebSocket error', e);
     socket.onmessage = (event) => {
       try {
-        const data = JSON.parse(event.data);
+        const data = JSON.parse(event.data) as Record<string, unknown>;
         setLastEvent(data);
-        if (data.type === 'new_message' && data.payload) {
-          setMessages((prev) => [...prev, data.payload as Message]);
+        // Backend broadcasts new messages as { type, conversation_id, message: {...} }.
+        // Older/other frames may use `payload`. Accept both.
+        const msg = (data.message ?? data.payload) as Message | undefined;
+        if (data.type === 'new_message' && msg) {
+          setMessages((prev) => [...prev, msg]);
         }
+        onMessageRef.current?.(data);
       } catch {
-        // ignore
+        // ignore malformed frames
       }
     };
 
@@ -69,7 +81,9 @@ export function useWebSocket() {
   const send = useCallback((event: WSEvent) => {
     if (ws.current?.readyState === WebSocket.OPEN) {
       ws.current.send(JSON.stringify(event));
+      return true;
     }
+    return false;
   }, []);
 
   useEffect(() => {
